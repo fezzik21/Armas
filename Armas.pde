@@ -3,19 +3,17 @@
 //select only front facing vertices (verts with front facing normals?)
 //allow graphical editing of normals
 //Draw origin rotation frame of size relative to the scale
-//Load Texture coordinates (yikes!)
-//Display texture(s)
 //still need better camera rotation - rotate around a look at point?
 //Allow for a simple "computational framework" (QScript)
-//edit boxes arrow keys to move around
 //nonsense text in text box doesn't cause an update
-//create a "toolbox" of clickable items to make changes to the world
-//move is busted again :(
 //add/remove normals button
 //make sure normals are being saved out to the obj if there are any
 //create cube, sphere, pyramid buttons
-//create a github page, and a description of what the project is
-//Seperate window out into a seperate tab
+//rotate mode
+//create a "bonus box" for secret commands
+//face-vertex data model is wrong; texture coordinates and normals are on the face, not the vertex
+//actually load the correct textures
+//display the texture indices somehow
 
 import org.joml.*;
 
@@ -24,13 +22,18 @@ ArrayList<Face> faces;
 ArrayList<Window> windows;
 Button snapToGridCheckbox;
 Button showVerticesCheckbox;
-Button showEdgesCheckbox, showFacesCheckbox, showLightingCheckbox, showNormalsCheckbox;
+Button centerOfMassCheckbox;
+Vertex centerOfMass;
+Vertex singleSelectedVertex;
+Button showEdgesCheckbox, showFacesCheckbox, showLightingCheckbox, showNormalsCheckbox, showTexturesCheckbox;
 TextBox xTextBox, yTextBox, zTextBox;
 TextBox nxTextBox, nyTextBox, nzTextBox;
 Label editLabel;
 int mode;
 boolean saveNextDraw;
 float oldWidth, oldHeight;
+boolean ctrlPressed = false;
+//PImage sampleTexture;
 
 class Window {
   int viewType;
@@ -88,9 +91,11 @@ class Window {
     float e = event.getCount();
     float s = (e > 0.0) ? SCROLL_MULTIPLIER : (1.0f / SCROLL_MULTIPLIER);
     if(viewType == VIEW_3D) {
-      c.moveForward((e > 0.0) ? 1.0 : -1.0);
+      c.moveForward((e == 0.0) ? 0.0 : (e > 0.0 ? 1.0 : -1.0));
     } else {
-      modelViewMatrix = modelViewMatrix.scale(s, s, s);
+      if (e != 0.0) {
+        modelViewMatrix = modelViewMatrix.scale(s, s, s);
+      }
     }
   }
 
@@ -104,7 +109,7 @@ class Window {
       selectMouseEndY += 3;
       if(viewType == VIEW_3D) {
         
-      g.perspective(PI/3.0, width/height, .0001, 100000.0);
+      g.perspective(PI/3.0, ((float)w) / h, .0001, 100000.0);
       g.resetMatrix();
       g.applyMatrix(modelViewMatrix.m00(), modelViewMatrix.m10(), modelViewMatrix.m20(), modelViewMatrix.m30(),
         modelViewMatrix.m01(), modelViewMatrix.m11(), modelViewMatrix.m21(), modelViewMatrix.m31(),
@@ -185,6 +190,17 @@ class Window {
     selectMouseEndY = mY;
   }
 
+  float getScaleFactor(float start, float end) {
+    float diff = end - start;
+    float baseScale = 1.0;
+    if(diff > 0.0) {
+      baseScale = pow(GEOM_SCALING_FACTOR, diff);
+    } else if (diff < 0.0) {
+      baseScale = (1.0f / pow(GEOM_SCALING_FACTOR, -diff));
+    } 
+    return baseScale;
+  }
+  
   void mouseDragged() {
     if(!processMousePosition())
       return;
@@ -230,13 +246,13 @@ class Window {
           switch(viewType) {
             case VIEW_X:
             { 
-              v.z -= (selectMouseEndX - selectMouseStartX) * scale.z;
-              v.y += (selectMouseEndY - selectMouseStartY) * scale.z;
+              v.z += (selectMouseEndX - selectMouseStartX) * scale.z;
+              v.y -= (selectMouseEndY - selectMouseStartY) * scale.z;
               if(snapToGridCheckbox.selected) {
                 float vGY = round(v.y / STARTING_SCALE) * STARTING_SCALE;
                 float vGZ = round(v.z / STARTING_SCALE) * STARTING_SCALE;
-                gridOffsetX = -(v.z - vGZ);
-                gridOffsetY = (v.y - vGY);
+                gridOffsetX = (v.z - vGZ);
+                gridOffsetY = -(v.y - vGY);
                 v.y = vGY;
                 v.z = vGZ;
               }
@@ -244,13 +260,13 @@ class Window {
             break;
             case VIEW_Y:
             { 
-              v.x -= (selectMouseEndX - selectMouseStartX) * scale.z;
-              v.z += (selectMouseEndY - selectMouseStartY) * scale.z;
+              v.x += (selectMouseEndX - selectMouseStartX) * scale.z;
+              v.z -= (selectMouseEndY - selectMouseStartY) * scale.z;
               if(snapToGridCheckbox.selected) {
                 float vGX = round(v.x / STARTING_SCALE) * STARTING_SCALE;
                 float vGZ = round(v.z / STARTING_SCALE) * STARTING_SCALE;
-                gridOffsetX = -(v.x - vGX);
-                gridOffsetY = (v.z - vGZ);
+                gridOffsetX = (v.x - vGX);
+                gridOffsetY = -(v.z - vGZ);
                 v.x = vGX;
                 v.z = vGZ;
               }
@@ -258,13 +274,13 @@ class Window {
             break;
             case VIEW_Z:
             { 
-              v.x += (selectMouseEndX - selectMouseStartX) * scale.z;
-              v.y += (selectMouseEndY - selectMouseStartY) * scale.z;
+              v.x -= (selectMouseEndX - selectMouseStartX) * scale.z;
+              v.y -= (selectMouseEndY - selectMouseStartY) * scale.z;
               if(snapToGridCheckbox.selected) {
                 float vGX = round(v.x / STARTING_SCALE) * STARTING_SCALE;
                 float vGY = round(v.y / STARTING_SCALE) * STARTING_SCALE;
-                gridOffsetX = (v.x - vGX);
-                gridOffsetY = (v.y - vGY);
+                gridOffsetX = -(v.x - vGX);
+                gridOffsetY = -(v.y - vGY);
                 v.x = vGX;
                 v.y = vGY;
               }
@@ -275,6 +291,109 @@ class Window {
           }
         }
       }
+      updateSelected();
+      selectMouseStartX = selectMouseEndX - (gridOffsetX / scale.z);
+      selectMouseStartY = selectMouseEndY - (gridOffsetY / scale.z);
+    } else if(mode == MODE_SCALE) {
+      for (int i = vertices.size()-1; i >= 0; i--) {
+        Vertex v = vertices.get(i);
+        if(v.selected) {
+          switch(viewType) {
+            case VIEW_X:
+            { 
+              float baseScaleZ = getScaleFactor(selectMouseStartX, selectMouseEndX);
+              float baseScaleY = getScaleFactor(selectMouseEndY, selectMouseStartY);
+              if(ctrlPressed) {
+                if(abs(selectMouseStartX - selectMouseEndX) > abs(selectMouseStartY - selectMouseEndY)) {
+                  baseScaleY = 1.0;
+                } else {
+                  baseScaleZ = 1.0;
+                }
+              }
+              if(centerOfMassCheckbox.selected) {
+                v.y = centerOfMass.y + (v.y - centerOfMass.y) * baseScaleY;
+                v.z = centerOfMass.z + (v.z - centerOfMass.z) * baseScaleZ;
+              } else {
+                v.y *= baseScaleY;
+                v.z *= baseScaleZ;
+              }
+            }
+            break;
+            case VIEW_Y:
+            { 
+              float baseScaleX = getScaleFactor(selectMouseStartX, selectMouseEndX);
+              float baseScaleZ = getScaleFactor(selectMouseEndY, selectMouseStartY);  
+              if(ctrlPressed) {
+                if(abs(selectMouseStartX - selectMouseEndX) > abs(selectMouseStartY - selectMouseEndY)) {
+                  baseScaleX = 1.0;
+                } else {
+                  baseScaleZ = 1.0;
+                }
+              }                   
+              if(centerOfMassCheckbox.selected) {
+                v.x = centerOfMass.x + (v.x - centerOfMass.x) * baseScaleX;
+                v.z = centerOfMass.z + (v.z - centerOfMass.z) * baseScaleZ;
+              } else {
+                v.x *= baseScaleX;
+                v.z *= baseScaleZ;
+              }
+            }
+            break;
+            case VIEW_Z:
+            { 
+              float baseScaleX = getScaleFactor(selectMouseStartX, selectMouseEndX);
+              float baseScaleY = getScaleFactor(selectMouseEndY, selectMouseStartY);  
+              if(ctrlPressed) {
+                if(abs(selectMouseStartX - selectMouseEndX) > abs(selectMouseStartY - selectMouseEndY)) {
+                  baseScaleX = 1.0;
+                } else {
+                  baseScaleY = 1.0;
+                }
+              }
+              if(centerOfMassCheckbox.selected) {
+                v.x = centerOfMass.x + (v.x - centerOfMass.x) * baseScaleX;
+                v.y = centerOfMass.y + (v.y - centerOfMass.y) * baseScaleY;
+              } else {
+                v.x *= baseScaleX;
+                v.y *= baseScaleY;
+              }
+            }
+            break;
+            case VIEW_3D:
+            break;
+          }
+        }
+      }
+      updateSelected();
+      selectMouseStartX = selectMouseEndX - (gridOffsetX / scale.z);
+      selectMouseStartY = selectMouseEndY - (gridOffsetY / scale.z);
+    } else if(mode == MODE_SCALE_ALL) {
+      for (int i = vertices.size()-1; i >= 0; i--) {
+        Vertex v = vertices.get(i);
+        if(v.selected) {
+          switch(viewType) {
+            case VIEW_X:
+            case VIEW_Y:
+            case VIEW_Z:
+            { 
+              float baseScale = getScaleFactor(selectMouseStartX, selectMouseEndX);
+              if(centerOfMassCheckbox.selected) {
+                v.x = centerOfMass.x + (v.x - centerOfMass.x) * baseScale;
+                v.y = centerOfMass.y + (v.y - centerOfMass.y) * baseScale;
+                v.z = centerOfMass.z + (v.z - centerOfMass.z) * baseScale;
+              } else {
+                v.x *= baseScale;
+                v.y *= baseScale;
+                v.z *= baseScale;
+              }
+            }
+            break;
+            case VIEW_3D:
+            break;
+          }
+        }
+      }
+      updateSelected();
       selectMouseStartX = selectMouseEndX - (gridOffsetX / scale.z);
       selectMouseStartY = selectMouseEndY - (gridOffsetY / scale.z);
     }
@@ -327,7 +446,7 @@ class Window {
     
     if(selecting && (mode == MODE_SELECT)) {
       if(viewType == VIEW_3D) {
-        g.perspective(PI/3.0, width/height, .0001, 100000.0);
+        g.perspective(PI/3.0, ((float)w) / h, .0001, 100000.0);
         g.resetMatrix();
         g.applyMatrix(modelViewMatrix.m00(), modelViewMatrix.m10(), modelViewMatrix.m20(), modelViewMatrix.m30(),
           modelViewMatrix.m01(), modelViewMatrix.m11(), modelViewMatrix.m21(), modelViewMatrix.m31(),
@@ -458,7 +577,7 @@ class Window {
        0.0, 0.0, 0.0, 
        0.0, -1.0, 0.0);
     } else if(viewType == VIEW_3D) {
-      g.perspective(PI/3.0, width/height, .0001, 100000.0);
+      g.perspective(PI/3.0, ((float)w) / h, .0001, 100000.0);
       g.resetMatrix();
       g.applyMatrix(modelViewMatrix.m00(), modelViewMatrix.m10(), modelViewMatrix.m20(), modelViewMatrix.m30(),
         modelViewMatrix.m01(), modelViewMatrix.m11(), modelViewMatrix.m21(), modelViewMatrix.m31(),
@@ -527,20 +646,39 @@ class Window {
     if(showLightingCheckbox.selected) {
       g.lights();
     }
+    boolean setTexture = true;
+    g.textureMode(NORMAL);
     for(int i = faces.size() - 1; i >= 0; i--) {
       Face f = faces.get(i);
       if(f.v1.hasNormal) {
         g.normal(f.v1.nx, f.v1.ny, f.v1.nz);
       }
-      g.vertex(f.v1.x, f.v1.y, f.v1.z);
+      if(showTexturesCheckbox.selected && f.v1.hasTexture) {
+        g.vertex(f.v1.x, f.v1.y, f.v1.z, f.v1.tx, f.v1.ty);
+        if(setTexture) {
+          setTexture = false;          
+          //g.texture(sampleTexture);
+        }
+      } else {
+        g.vertex(f.v1.x, f.v1.y, f.v1.z);
+      }
       if(f.v2.hasNormal) {
         g.normal(f.v2.nx, f.v2.ny, f.v2.nz);
       }
-      g.vertex(f.v2.x, f.v2.y, f.v2.z);
+      if(showTexturesCheckbox.selected && f.v2.hasTexture) {
+        g.vertex(f.v2.x, f.v2.y, f.v2.z, f.v2.tx, f.v2.ty);
+      } else {
+        g.vertex(f.v2.x, f.v2.y, f.v2.z);
+      }
       if(f.v3.hasNormal) {
         g.normal(f.v3.nx, f.v3.ny, f.v3.nz);
       }
-      g.vertex(f.v3.x, f.v3.y, f.v3.z);
+      if(showTexturesCheckbox.selected && f.v3.hasTexture) {
+        //println("drawing vertex: " + f.v3.x + " , " + f.v3.y + " , " + f.v3.z + " , " + f.v3.tx + " , " + f.v3.ty);
+        g.vertex(f.v3.x, f.v3.y, f.v3.z, f.v3.tx, f.v3.ty);
+      } else {
+        g.vertex(f.v3.x, f.v3.y, f.v3.z);
+      }
     }
     g.endShape(); 
     
@@ -589,10 +727,14 @@ class Window {
 
 void updateSelected() {
   ArrayList<Vertex> selected = new ArrayList<Vertex>();
+  centerOfMass = new Vertex(0.0, 0.0, 0.0);
   for (int i = vertices.size()-1; i >= 0; i--) {
     Vertex v = vertices.get(i);
     if(v.selected) {
       selected.add(v);
+      centerOfMass.x += v.x;
+      centerOfMass.y += v.y;
+      centerOfMass.z += v.z;
       xTextBox.t = String.valueOf(v.x);
       yTextBox.t = String.valueOf(v.y);
       zTextBox.t = String.valueOf(v.z);
@@ -601,27 +743,30 @@ void updateSelected() {
       nzTextBox.t = String.valueOf(v.nz);
     }
   }
+  centerOfMass.x /= selected.size();
+  centerOfMass.y /= selected.size();
+  centerOfMass.z /= selected.size();  
   editLabel.visible = nxTextBox.visible = nyTextBox.visible = nzTextBox.visible =xTextBox.visible = yTextBox.visible = zTextBox.visible = false;
   if(selected.size() == 1) {
+    singleSelectedVertex = selected.get(0);
     editLabel.visible = xTextBox.visible = yTextBox.visible = zTextBox.visible = true;
-    if(selected.get(0).hasNormal) {
+    if(singleSelectedVertex.hasNormal) {
       nxTextBox.visible = nyTextBox.visible = nzTextBox.visible = true;
     }
   }
+  
 }
 
 void updateSelectedVertexPosition() {
-  for (int i = vertices.size()-1; i >= 0; i--) {
-    Vertex v = vertices.get(i);
-    if(v.selected) {
-      v.x = float(xTextBox.t);
-      v.y = float(yTextBox.t);
-      v.z = float(zTextBox.t);
-      if(v.hasNormal) {
-        v.nx = float(nxTextBox.t);
-        v.ny = float(nyTextBox.t);
-        v.nz = float(nzTextBox.t);
-      }
+  Vertex v = singleSelectedVertex;
+  if(v.selected) {
+    v.x = float(xTextBox.t);
+    v.y = float(yTextBox.t);
+    v.z = float(zTextBox.t);
+    if(v.hasNormal) {
+      v.nx = float(nxTextBox.t);
+      v.ny = float(nyTextBox.t);
+      v.nz = float(nzTextBox.t);
     }
   }
 }
@@ -670,12 +815,17 @@ void setup() {
   new Line(550);
   new Label("SHOW", 305);
   editLabel = new Label("EDIT", 555);
-  new Button("Open", "o", false, null,  width - UI_COLUMN_WIDTH + 10, 20, 100, 25, new Thunk() { @Override public void apply() { openFile(myThis); } } );
-  new Button("Save", "p", false, null,  width - UI_COLUMN_WIDTH + 10 + 110, 20, 100, 25, new Thunk() { @Override public void apply() { saveFile(myThis); } } );
-  new Button("Vertex", "1", false, "Mode",  width - UI_COLUMN_WIDTH + 10, 80, 100, 25, new Thunk() { @Override public void apply() { mode = MODE_VERTEX; } } ).selected = true;
-  new Button("Select", "2", false, "Mode",  width - UI_COLUMN_WIDTH + 10 + 110, 80, 100, 25, new Thunk() { @Override public void apply() { mode = MODE_SELECT; } } );
-  new Button("Move", "3", false, "Mode",  width - UI_COLUMN_WIDTH + 10, 120, 100, 25, new Thunk() { @Override public void apply() { mode = MODE_MOVE; } } );
-  snapToGridCheckbox = new Button("Snap To Grid", "g", true, null,  width - UI_COLUMN_WIDTH + 10, 200, 100, 25, new Thunk() { @Override public void apply() { } } );
+  new Button("Open", "o", false, null,  width - UI_COLUMN_WIDTH + 10, 15, 100, 25, new Thunk() { @Override public void apply() { openFile(myThis); } } );
+  new Button("Save", "p", false, null,  width - UI_COLUMN_WIDTH + 10 + 110, 15, 100, 25, new Thunk() { @Override public void apply() { saveFile(myThis); } } );
+  new Button("Vertex", "1", false, "Mode",  width - UI_COLUMN_WIDTH + 10, 60, 100, 25, new Thunk() { @Override public void apply() { mode = MODE_VERTEX; } } ).selected = true;
+  new Button("Select", "2", false, "Mode",  width - UI_COLUMN_WIDTH + 10 + 110, 60, 100, 25, new Thunk() { @Override public void apply() { mode = MODE_SELECT; } } );
+  new Button("Move", "3", false, "Mode",  width - UI_COLUMN_WIDTH + 10, 100, 100, 25, new Thunk() { @Override public void apply() { mode = MODE_MOVE; } } );
+  new Button("Scale (All)", "4", false, "Mode",  width - UI_COLUMN_WIDTH + 10 + 110, 100, 100, 25, new Thunk() { @Override public void apply() { mode = MODE_SCALE_ALL; } } );
+  new Button("Scale", "5", false, "Mode",  width - UI_COLUMN_WIDTH + 10, 140, 100, 25, new Thunk() { @Override public void apply() { mode = MODE_SCALE; } } );
+  new Button("Rotate", "6", false, "Mode",  width - UI_COLUMN_WIDTH + 10 + 110, 140, 100, 25, new Thunk() { @Override public void apply() { mode = MODE_ROTATE; } } );
+  snapToGridCheckbox = new Button("Snap To Grid", "g", true, null,  width - UI_COLUMN_WIDTH + 10, 190, 100, 25, new Thunk() { @Override public void apply() { } } );
+  centerOfMassCheckbox = new Button("Center of Mass", "h", true, null,  width - UI_COLUMN_WIDTH + 10 + 110, 190, 100, 25, new Thunk() { @Override public void apply() { } } );
+  centerOfMassCheckbox.selected = true;
   showVerticesCheckbox = new Button("Vertices", "z", true, null,  width - UI_COLUMN_WIDTH + 10, 340, 100, 25, new Thunk() { @Override public void apply() { } } );
   showVerticesCheckbox.selected = true;
   showEdgesCheckbox = new Button("Edges", "x", true, null,  width - UI_COLUMN_WIDTH + 10 + 110, 340, 100, 25, new Thunk() { @Override public void apply() { } } );
@@ -686,6 +836,11 @@ void setup() {
   showLightingCheckbox.selected = true;
   showNormalsCheckbox = new Button("Normals", "b", true, null,  width - UI_COLUMN_WIDTH + 10, 420, 100, 25, new Thunk() { @Override public void apply() { } } );
   showNormalsCheckbox.selected = true;
+  showTexturesCheckbox = new Button("Texture", "n", true, null,  width - UI_COLUMN_WIDTH + 10 + 110, 420, 100, 25, new Thunk() { @Override public void apply() { } } );
+  showTexturesCheckbox.selected = true;
+  
+  new Button("Cube", "/", false, null,  width - UI_COLUMN_WIDTH + 10, 480, 100, 25, new Thunk() { @Override public void apply() {  makeCube(); } } );
+  new Button("Sphere", "?", false, null,  width - UI_COLUMN_WIDTH + 10 + 110, 480, 100, 25, new Thunk() { @Override public void apply() {  makeSphere(); } } );
   
   xTextBox = new TextBox("", "X", width - UI_COLUMN_WIDTH + 10, 600, 63, 25, new Thunk() { @Override public void apply() { updateSelectedVertexPosition(); } } );
   yTextBox = new TextBox("", "Y", width - UI_COLUMN_WIDTH + 10 + 73, 600, 63, 25, new Thunk() { @Override public void apply() { updateSelectedVertexPosition(); } });
@@ -704,6 +859,8 @@ void setup() {
   updateSelected();
   mode = MODE_VERTEX; 
   thread("updateUI");
+  
+  //sampleTexture = loadImage("Eye_D.jpg");
 }
 
 void mouseWheel(MouseEvent event) {
@@ -743,6 +900,11 @@ void keyPressed() {
     }
   }
   if(key == ESC) key = 0;
+  if (key == CODED) {
+    if (keyCode == CONTROL) {
+      ctrlPressed = true;
+    }
+  }
 }
 
 void keyReleased() {   
@@ -750,6 +912,17 @@ void keyReleased() {
     w.keyReleased();
   }
   ArrayList<Vertex> selected = new ArrayList<Vertex>();
+  if (key == CODED) {
+    if (keyCode == CONTROL) {
+      ctrlPressed = false;
+    }
+  }
+  if(ctrlPressed && keyCode == 65) {
+    for (int i = vertices.size()-1; i >= 0; i--) {
+      Vertex v = vertices.get(i);
+      v.selected = true;
+    }
+  }
   if(key == 'f') {
     for (int i = vertices.size()-1; i >= 0; i--) {
       Vertex v = vertices.get(i);

@@ -2,6 +2,10 @@
 static final int MODE_VERTEX = 1;
 static final int MODE_SELECT = 2;
 static final int MODE_MOVE = 3;
+static final int MODE_SCALE_ALL = 4;
+static final int MODE_SCALE = 5;
+static final int MODE_ROTATE = 6;
+
 
 static final int VIEW_Z = 1;   ///View down the Z axis at Z = 0
 static final int VIEW_Y = 2;   ///View down the Y axis at Y = 0
@@ -25,3 +29,5 @@ static final int UI_BAR_HEIGHT = 50;
 
 
 static final float PAN_SPEED_3D = 0.2;
+
+static final float GEOM_SCALING_FACTOR = 1.001;

@@ -23,6 +23,25 @@ class MyFileChooser extends JFileChooser {
     }
 }
 
+Vertex vertexHelper(String s, int startingCount, ArrayList<Vector3f> textureIndices, ArrayList<Vector3f> normals)
+{
+  String [] subPieces = split(s, '/');
+  Vertex v1 = vertices.get(int(subPieces[0]) - 1 + startingCount);                                  
+  if(subPieces.length > 1) {
+    //Get texture index
+    if(subPieces[1].length() > 0) {
+      v1.setTexture(textureIndices.get(int(subPieces[1]) - 1).x, textureIndices.get(int(subPieces[1]) - 1).y);
+    }
+  }
+  if(subPieces.length > 2) {
+    //Get normal index
+    if(subPieces[2].length() > 0) {
+      v1.setNormal(normals.get(int(subPieces[2]) - 1).x, normals.get(int(subPieces[2]) - 1).y, normals.get(int(subPieces[2]) - 1).z);
+    }
+  }
+  return v1;
+}
+
 void openFile(final PApplet p) {
   EventQueue.invokeLater(new Runnable() {
             @Override
@@ -48,7 +67,8 @@ void openFile(final PApplet p) {
                               Scanner scanner = new Scanner(selectedFile);
                               String line = null;
                               int startingCount = vertices.size();
-                              int curNormalIndex = 0;
+                              ArrayList<Vector3f> normals = new ArrayList<Vector3f>();
+                              ArrayList<Vector3f> textureIndices = new ArrayList<Vector3f>();
                               while(scanner.hasNextLine()) {
                                 line = scanner.nextLine();
                                 String[] pieces = splitTokens(line, " ");
@@ -57,6 +77,9 @@ void openFile(final PApplet p) {
                                 }
                                 if(pieces[0].equals("#")) {
                                   continue;
+                                }
+                                if(pieces[0].equals("o")) {
+                                  //New object.  We don't support objects yet
                                 }
                                 if(pieces[0].equals("v")) {
                                   float x = float(pieces[1]);
@@ -71,34 +94,34 @@ void openFile(final PApplet p) {
                                   float y = float(pieces[2]);
                                   float z = float(pieces[3]);
                                   
-                                  vertices.get(curNormalIndex).setNormal(x, y, z);
-                                  curNormalIndex++;
+                                  normals.add(new Vector3f(x, y, z));                                  
                                 } 
+                                if(pieces[0].equals("vt")) {
+                                  float x = float(pieces[1]);
+                                  float y = float(pieces[2]);
+                                  //float z = float(pieces[3]);  //There is a third, we're ignoring
+                                  
+                                  textureIndices.add(new Vector3f(x, y, 0));
+                                } 
+                                //OK this is actually wrong.  We're storing the normal and the texture index on the vertex, where as they can differ
+                                //per face.  That means we're getting this wrong for some models.  We need to re-architect the data model to support this.
                                 if(pieces[0].equals("f")) {
                                   if(pieces.length == 4) {
-                                    String [] subPieces = split(pieces[1], '/');
-                                    Vertex v1 = vertices.get(int(subPieces[0]) - 1 + startingCount);
-                                    subPieces = split(pieces[2], '/');
-                                    Vertex v2 = vertices.get(int(subPieces[0]) - 1 + startingCount);
-                                    subPieces = split(pieces[3], '/');
-                                    Vertex v3 = vertices.get(int(subPieces[0]) - 1 + startingCount);
-                                    
+                                    Vertex v1 = vertexHelper(pieces[1], startingCount, textureIndices, normals);
+                                    Vertex v2 = vertexHelper(pieces[2], startingCount, textureIndices, normals);
+                                    Vertex v3 = vertexHelper(pieces[3], startingCount, textureIndices, normals);
                                     faces.add(new Face(v1, v2, v3));
                                   } else if (pieces.length == 5) {
-                                    String [] subPieces = split(pieces[1], '/');
-                                    Vertex v1 = vertices.get(int(subPieces[0]) - 1 + startingCount);
-                                    subPieces = split(pieces[2], '/');
-                                    Vertex v2 = vertices.get(int(subPieces[0]) - 1 + startingCount);
-                                    subPieces = split(pieces[3], '/');
-                                    Vertex v3 = vertices.get(int(subPieces[0]) - 1 + startingCount);
-                                    subPieces = split(pieces[4], '/');
-                                    Vertex v4 = vertices.get(int(subPieces[0]) - 1 + startingCount);
-                                    
+                                    Vertex v1 = vertexHelper(pieces[1], startingCount, textureIndices, normals);
+                                    Vertex v2 = vertexHelper(pieces[2], startingCount, textureIndices, normals);
+                                    Vertex v3 = vertexHelper(pieces[3], startingCount, textureIndices, normals);
+                                    Vertex v4 = vertexHelper(pieces[4], startingCount, textureIndices, normals);                                    
                                     faces.add(new Face(v1, v2, v3));
                                     faces.add(new Face(v1, v3, v4));
                                   }
                                 }
                               }
+                              println("read: " + vertices.size() + " , " + textureIndices.size() + " , " + normals.size());
                               scanner.close();
                             } catch (IOException e) {
                               print("exception " + e);

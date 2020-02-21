@@ -172,10 +172,12 @@ class TextBox extends UIElement {
   String label;
   public boolean focused;
   Thunk valueUpdated;
+  int caretPos;
   TextBox(String tIn, String labelIn, int xIn, int yIn, int wIn, int hIn, Thunk valueUpdatedIn) {
     x = xIn; y = yIn; w = wIn; h = hIn;
     t = tIn;
     label = labelIn;
+    caretPos = 0;
     elements.add(this);
     focused = false;
     valueUpdated = valueUpdatedIn;
@@ -189,10 +191,12 @@ class TextBox extends UIElement {
     fill(0, 0, 0);
     textAlign(LEFT, CENTER);
     text(label, x, y - 22, w, h);
+    text(t, x + 2, y, w, h);
     if(focused && (frameCount % 8 < 4)) {
-      text(t + "_", x + 2, y, w, h);
-    } else {
-      text(t, x + 2, y, w, h);
+      float c = textWidth(t.substring(0, caretPos));
+      if(c < w - 4) {
+        text("_", x + 2 + c, y, w, h);
+      }
     }
   }
   
@@ -200,6 +204,7 @@ class TextBox extends UIElement {
     if(wasMousePressed && !isMousePressed) {
        if((mouseX > x) && (mouseX < x + w) && (mouseY > y) && (mouseY < y + h)) {
          focused = true;
+         caretPos = t.length();
        } else {
          focused = false;
        }
@@ -216,10 +221,24 @@ class TextBox extends UIElement {
         focused = false;
       } else if ((keyCode == ENTER) || (keyCode == ESC)) {
         focused = false;
+      } else if (keyCode == LEFT) {
+        if(caretPos > 0) caretPos--;
+      } else if (keyCode == RIGHT) {
+        if(caretPos < t.length()) caretPos++;
       } else if(keyCode == BACKSPACE) {
-        t = t.substring(0, max(0, t.length()-1));
+        if(caretPos == t.length()) {
+          t = t.substring(0, max(0, t.length()-1));
+        } else if(caretPos > 0) {
+          t = t.substring(0, caretPos - 1) + t.substring(caretPos, t.length());
+        }
+        caretPos--;
       } else {
-        t = t + key;
+        if(caretPos == t.length()) {
+          t = t + key;
+        } else {
+          t = t.substring(0, caretPos) + key + t.substring(caretPos, t.length());
+        }
+        caretPos++;
       }
       valueUpdated.apply();
     }
