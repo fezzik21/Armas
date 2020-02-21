@@ -7,13 +7,13 @@
 //Allow for a simple "computational framework" (QScript)
 //nonsense text in text box doesn't cause an update
 //add/remove normals button
-//make sure normals are being saved out to the obj if there are any
-//create cube, sphere, pyramid buttons
+//save normals, texture coordinates to the obj file if there are any
 //rotate mode
 //create a "bonus box" for secret commands
-//face-vertex data model is wrong; texture coordinates and normals are on the face, not the vertex
 //actually load the correct textures
 //display the texture indices somehow
+//be able to select faces
+//selecting faces causes you to be able to edit normals, texture coordinates
 
 import org.joml.*;
 
@@ -654,42 +654,52 @@ class Window {
         g.normal(f.v1.nx, f.v1.ny, f.v1.nz);
       }
       if(showTexturesCheckbox.selected && f.v1.hasTexture) {
-        g.vertex(f.v1.x, f.v1.y, f.v1.z, f.v1.tx, f.v1.ty);
+        g.vertex(f.v1.v.x, f.v1.v.y, f.v1.v.z, f.v1.tx, f.v1.ty);
         if(setTexture) {
           setTexture = false;          
           //g.texture(sampleTexture);
         }
       } else {
-        g.vertex(f.v1.x, f.v1.y, f.v1.z);
+        g.vertex(f.v1.v.x, f.v1.v.y, f.v1.v.z);
       }
       if(f.v2.hasNormal) {
         g.normal(f.v2.nx, f.v2.ny, f.v2.nz);
       }
       if(showTexturesCheckbox.selected && f.v2.hasTexture) {
-        g.vertex(f.v2.x, f.v2.y, f.v2.z, f.v2.tx, f.v2.ty);
+        g.vertex(f.v2.v.x, f.v2.v.y, f.v2.v.z, f.v2.tx, f.v2.ty);
       } else {
-        g.vertex(f.v2.x, f.v2.y, f.v2.z);
+        g.vertex(f.v2.v.x, f.v2.v.y, f.v2.v.z);
       }
       if(f.v3.hasNormal) {
         g.normal(f.v3.nx, f.v3.ny, f.v3.nz);
       }
       if(showTexturesCheckbox.selected && f.v3.hasTexture) {
         //println("drawing vertex: " + f.v3.x + " , " + f.v3.y + " , " + f.v3.z + " , " + f.v3.tx + " , " + f.v3.ty);
-        g.vertex(f.v3.x, f.v3.y, f.v3.z, f.v3.tx, f.v3.ty);
+        g.vertex(f.v3.v.x, f.v3.v.y, f.v3.v.z, f.v3.tx, f.v3.ty);
       } else {
-        g.vertex(f.v3.x, f.v3.y, f.v3.z);
+        g.vertex(f.v3.v.x, f.v3.v.y, f.v3.v.z);
       }
     }
     g.endShape(); 
     
     if(showNormalsCheckbox.selected) {
       g.beginShape(LINES);
-      for (int i = vertices.size()-1; i >= 0; i--) {
-          Vertex v = vertices.get(i);
-          if(v.hasNormal) {
+      for (int i = faces.size()-1; i >= 0; i--) {
+          Face f = faces.get(i);
+          if(f.v1.hasNormal) {
             g.stroke(255, 0, 0);
-            g.vertex(v.x, v.y, v.z);
-            g.vertex(v.x + v.nx * 0.2, v.y + v.ny * 0.2, v.z + v.nz * 0.2);          
+            g.vertex(f.v1.v.x, f.v1.v.y, f.v1.v.z);
+            g.vertex(f.v1.v.x + f.v1.nx * 0.2, f.v1.v.y + f.v1.ny * 0.2, f.v1.v.z + f.v1.nz * 0.2);          
+          }
+          if(f.v2.hasNormal) {
+            g.stroke(255, 0, 0);
+            g.vertex(f.v2.v.x, f.v2.v.y, f.v2.v.z);
+            g.vertex(f.v2.v.x + f.v2.nx * 0.2, f.v2.v.y + f.v2.ny * 0.2, f.v2.v.z + f.v2.nz * 0.2);          
+          }
+          if(f.v3.hasNormal) {
+            g.stroke(255, 0, 0);
+            g.vertex(f.v3.v.x, f.v3.v.y, f.v3.v.z);
+            g.vertex(f.v3.v.x + f.v3.nx * 0.2, f.v3.v.y + f.v3.ny * 0.2, f.v3.v.z + f.v3.nz * 0.2);          
           }
       }
       g.endShape();
@@ -738,9 +748,9 @@ void updateSelected() {
       xTextBox.t = String.valueOf(v.x);
       yTextBox.t = String.valueOf(v.y);
       zTextBox.t = String.valueOf(v.z);
-      nxTextBox.t = String.valueOf(v.nx);
+      /*nxTextBox.t = String.valueOf(v.nx);
       nyTextBox.t = String.valueOf(v.ny);
-      nzTextBox.t = String.valueOf(v.nz);
+      nzTextBox.t = String.valueOf(v.nz);*/
     }
   }
   centerOfMass.x /= selected.size();
@@ -750,9 +760,9 @@ void updateSelected() {
   if(selected.size() == 1) {
     singleSelectedVertex = selected.get(0);
     editLabel.visible = xTextBox.visible = yTextBox.visible = zTextBox.visible = true;
-    if(singleSelectedVertex.hasNormal) {
+    /*if(singleSelectedVertex.hasNormal) {
       nxTextBox.visible = nyTextBox.visible = nzTextBox.visible = true;
-    }
+    }*/
   }
   
 }
@@ -763,11 +773,11 @@ void updateSelectedVertexPosition() {
     v.x = float(xTextBox.t);
     v.y = float(yTextBox.t);
     v.z = float(zTextBox.t);
-    if(v.hasNormal) {
+    /*if(v.hasNormal) {
       v.nx = float(nxTextBox.t);
       v.ny = float(nyTextBox.t);
       v.nz = float(nzTextBox.t);
-    }
+    }*/
   }
 }
 
@@ -944,7 +954,7 @@ void keyReleased() {
   } else if (key == DELETE) {
     for (int i = faces.size()-1; i >= 0; i--) {
       Face f = faces.get(i);
-      if(f.v1.selected || f.v2.selected || f.v3.selected) {
+      if(f.v1.v.selected || f.v2.v.selected || f.v3.v.selected) {
         faces.remove(f);
       }
     }

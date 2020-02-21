@@ -23,10 +23,10 @@ class MyFileChooser extends JFileChooser {
     }
 }
 
-Vertex vertexHelper(String s, int startingCount, ArrayList<Vector3f> textureIndices, ArrayList<Vector3f> normals)
+VertexRecord vertexHelper(String s, int startingCount, ArrayList<Vector3f> textureIndices, ArrayList<Vector3f> normals)
 {
   String [] subPieces = split(s, '/');
-  Vertex v1 = vertices.get(int(subPieces[0]) - 1 + startingCount);                                  
+  VertexRecord v1 = new VertexRecord(vertices.get(int(subPieces[0]) - 1 + startingCount));                                  
   if(subPieces.length > 1) {
     //Get texture index
     if(subPieces[1].length() > 0) {
@@ -107,15 +107,15 @@ void openFile(final PApplet p) {
                                 //per face.  That means we're getting this wrong for some models.  We need to re-architect the data model to support this.
                                 if(pieces[0].equals("f")) {
                                   if(pieces.length == 4) {
-                                    Vertex v1 = vertexHelper(pieces[1], startingCount, textureIndices, normals);
-                                    Vertex v2 = vertexHelper(pieces[2], startingCount, textureIndices, normals);
-                                    Vertex v3 = vertexHelper(pieces[3], startingCount, textureIndices, normals);
+                                    VertexRecord v1 = vertexHelper(pieces[1], startingCount, textureIndices, normals);
+                                    VertexRecord v2 = vertexHelper(pieces[2], startingCount, textureIndices, normals);
+                                    VertexRecord v3 = vertexHelper(pieces[3], startingCount, textureIndices, normals);
                                     faces.add(new Face(v1, v2, v3));
                                   } else if (pieces.length == 5) {
-                                    Vertex v1 = vertexHelper(pieces[1], startingCount, textureIndices, normals);
-                                    Vertex v2 = vertexHelper(pieces[2], startingCount, textureIndices, normals);
-                                    Vertex v3 = vertexHelper(pieces[3], startingCount, textureIndices, normals);
-                                    Vertex v4 = vertexHelper(pieces[4], startingCount, textureIndices, normals);                                    
+                                    VertexRecord v1 = vertexHelper(pieces[1], startingCount, textureIndices, normals);
+                                    VertexRecord v2 = vertexHelper(pieces[2], startingCount, textureIndices, normals);
+                                    VertexRecord v3 = vertexHelper(pieces[3], startingCount, textureIndices, normals);
+                                    VertexRecord v4 = vertexHelper(pieces[4], startingCount, textureIndices, normals);                                    
                                     faces.add(new Face(v1, v2, v3));
                                     faces.add(new Face(v1, v3, v4));
                                   }
@@ -153,7 +153,7 @@ void saveFile(final PApplet p) {
                           pw.println("");
                           for (int i = faces.size()-1; i >= 0; i--) {
                             Face f = faces.get(i);
-                            pw.println("f " + (vertices.indexOf(f.v1) + 1) + " " + (vertices.indexOf(f.v2) + 1) + " " + (vertices.indexOf(f.v3) + 1));
+                            pw.println("f " + (vertices.indexOf(f.v1.v) + 1) + " " + (vertices.indexOf(f.v2.v) + 1) + " " + (vertices.indexOf(f.v3.v) + 1));
                           }
                           pw.flush();
                           pw.close();
