@@ -20,6 +20,7 @@ import org.joml.*;
 ArrayList<Vertex> vertices;
 ArrayList<Face> faces;
 ArrayList<Window> windows;
+HashMap<String, Material> materials;
 Button snapToGridCheckbox;
 Button showVerticesCheckbox;
 Button centerOfMassCheckbox;
@@ -650,6 +651,11 @@ class Window {
     g.textureMode(NORMAL);
     for(int i = faces.size() - 1; i >= 0; i--) {
       Face f = faces.get(i);
+      if(f.m != null) {
+        g.ambient(255 * f.m.Ka.x, 255 * f.m.Ka.y, 255 * f.m.Ka.z);
+        g.fill(255 * f.m.Kd.x, 255 * f.m.Kd.y, 255 * f.m.Kd.z);
+        g.specular(255 * f.m.Ks.x, 255 * f.m.Ks.y, 255 * f.m.Ks.z);
+      }
       if(f.v1.hasNormal) {
         g.normal(f.v1.nx, f.v1.ny, f.v1.nz);
       }
@@ -818,6 +824,7 @@ void setup() {
   vertices = new ArrayList<Vertex>();
   faces = new ArrayList<Face>();
   windows = new ArrayList<Window>();
+  materials = new HashMap<String, Material>();
   
   //c = new GUIController(this);
   final PApplet myThis = this;

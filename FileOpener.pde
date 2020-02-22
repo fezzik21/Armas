@@ -42,6 +42,34 @@ VertexRecord vertexHelper(String s, int startingCount, ArrayList<Vector3f> textu
   return v1;
 }
 
+void loadMaterials(String s) throws IOException {
+  Material m = null;
+  File f = new File(s);
+  Scanner scanner = new Scanner(f);
+  String line = null;
+  while(scanner.hasNextLine()) {
+    line = scanner.nextLine();
+    String[] pieces = splitTokens(line, " ");
+    if(pieces.length == 0) {
+      continue;
+    }
+    if(pieces[0].equals("newmtl")) {
+      m = new Material(pieces[1]);
+      materials.put(m.name, m);
+    }
+    if(pieces[0].equals("Ka")) {
+      m.Ka = new Vector3f(float(pieces[1]), float(pieces[2]), float(pieces[3]));
+    }
+    if(pieces[0].equals("Kd")) {
+      m.Kd = new Vector3f(float(pieces[1]), float(pieces[2]), float(pieces[3]));
+    }
+    if(pieces[0].equals("Ks")) {
+      m.Ks = new Vector3f(float(pieces[1]), float(pieces[2]), float(pieces[3]));
+    }
+  }
+  return;
+}
+
 void openFile(final PApplet p) {
   EventQueue.invokeLater(new Runnable() {
             @Override
@@ -69,6 +97,7 @@ void openFile(final PApplet p) {
                               int startingCount = vertices.size();
                               ArrayList<Vector3f> normals = new ArrayList<Vector3f>();
                               ArrayList<Vector3f> textureIndices = new ArrayList<Vector3f>();
+                              Material curMaterial = null;
                               while(scanner.hasNextLine()) {
                                 line = scanner.nextLine();
                                 String[] pieces = splitTokens(line, " ");
@@ -80,6 +109,12 @@ void openFile(final PApplet p) {
                                 }
                                 if(pieces[0].equals("o")) {
                                   //New object.  We don't support objects yet
+                                }
+                                if(pieces[0].equals("mtllib")) {                                  
+                                  loadMaterials(selectedFile.getParent() + "\\" + pieces[1]);
+                                }
+                                if(pieces[0].equals("usemtl")) {
+                                  curMaterial = materials.get(pieces[1]);
                                 }
                                 if(pieces[0].equals("v")) {
                                   float x = float(pieces[1]);
@@ -110,14 +145,14 @@ void openFile(final PApplet p) {
                                     VertexRecord v1 = vertexHelper(pieces[1], startingCount, textureIndices, normals);
                                     VertexRecord v2 = vertexHelper(pieces[2], startingCount, textureIndices, normals);
                                     VertexRecord v3 = vertexHelper(pieces[3], startingCount, textureIndices, normals);
-                                    faces.add(new Face(v1, v2, v3));
+                                    faces.add(new Face(v1, v2, v3, curMaterial));
                                   } else if (pieces.length == 5) {
                                     VertexRecord v1 = vertexHelper(pieces[1], startingCount, textureIndices, normals);
                                     VertexRecord v2 = vertexHelper(pieces[2], startingCount, textureIndices, normals);
                                     VertexRecord v3 = vertexHelper(pieces[3], startingCount, textureIndices, normals);
                                     VertexRecord v4 = vertexHelper(pieces[4], startingCount, textureIndices, normals);                                    
-                                    faces.add(new Face(v1, v2, v3));
-                                    faces.add(new Face(v1, v3, v4));
+                                    faces.add(new Face(v1, v2, v3, curMaterial));
+                                    faces.add(new Face(v1, v3, v4, curMaterial));
                                   }
                                 }
                               }

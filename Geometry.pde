@@ -40,14 +40,32 @@ class VertexRecord {
 class Face {
   VertexRecord v1, v2, v3;
   boolean selected;
+  Material m;
   
   Face(Vertex inV1, Vertex inV2, Vertex inV3) {
     v1 = new VertexRecord(inV1); v2 = new VertexRecord(inV2); v3 = new VertexRecord(inV3);
     selected = false;
+    m = null;
   }
   Face(VertexRecord inV1, VertexRecord inV2, VertexRecord inV3) {
     v1 = inV1; v2 = inV2; v3 = inV3;
     selected = false;
+  }
+  Face(VertexRecord inV1, VertexRecord inV2, VertexRecord inV3, Material mIn) {
+    v1 = inV1; v2 = inV2; v3 = inV3;
+    m = mIn;
+    selected = false;
+  }
+}
+
+class Material {
+  String name;
+  Vector3f Ka, Kd, Ks;
+  Material(String nameIn) {
+    name = nameIn;
+    Ka = new Vector3f();
+    Kd = new Vector3f();
+    Ks = new Vector3f();
   }
 }
 
