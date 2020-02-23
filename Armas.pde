@@ -14,6 +14,7 @@
 //text boxes miss a lot of keystrokes - it's because pressing more than one at once isn't working correctly
 //editing a material
 //color picker
+//logo (dissolving cube?)
 
 //What's my MVP to release this game to others (0.001):
 //Being able to import and correctly display materials (modulo some of the weirder bits)
