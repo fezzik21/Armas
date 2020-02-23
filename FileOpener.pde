@@ -66,7 +66,12 @@ void loadMaterials(String s) throws IOException {
     if(pieces[0].equals("Ks")) {
       m.Ks = new Vector3f(float(pieces[1]), float(pieces[2]), float(pieces[3]));
     }
+    if(pieces[0].equals("map_Kd")) {
+      println(f.getParent() + "\\" + pieces[1]);
+      m.texture_diffuse = loadImage(f.getParent() + "\\" + pieces[1]);      
+    }
   }
+  scanner.close();
   return;
 }
 

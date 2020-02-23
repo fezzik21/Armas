@@ -1,10 +1,11 @@
 
-static final int MODE_VERTEX = 1;
-static final int MODE_SELECT = 2;
-static final int MODE_MOVE = 3;
-static final int MODE_SCALE_ALL = 4;
-static final int MODE_SCALE = 5;
-static final int MODE_ROTATE = 6;
+static final int MODE_PLACE = 1;
+static final int MODE_SELECT_VERTEX = 2;
+static final int MODE_SELECT_FACE = 3;
+static final int MODE_MOVE = 4;
+static final int MODE_SCALE_ALL = 5;
+static final int MODE_SCALE = 6;
+static final int MODE_ROTATE = 7;
 
 
 static final int VIEW_Z = 1;   ///View down the Z axis at Z = 0

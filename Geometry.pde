@@ -61,11 +61,13 @@ class Face {
 class Material {
   String name;
   Vector3f Ka, Kd, Ks;
+  PImage texture_diffuse;
   Material(String nameIn) {
     name = nameIn;
     Ka = new Vector3f();
     Kd = new Vector3f();
     Ks = new Vector3f();
+    texture_diffuse = null;
   }
 }
 

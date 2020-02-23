@@ -1,7 +1,5 @@
 
 ArrayList<UIElement> elements = new ArrayList<UIElement>();
-//ArrayList<TextBox> textBoxes = new ArrayList<TextBox>();
-//ArrayList<Button> buttons = new ArrayList<Button>();
 boolean isMousePressed = false;
 boolean isKeyPressed = false;
 boolean wasMousePressed = false;
@@ -46,6 +44,9 @@ void resizeUI(float oldW, float oldH, float newW, float newH) {
   for (int i = elements.size()-1; i >= 0; i--) {
      UIElement e = elements.get(i);
      e.x += (newW - oldW);
+     if(e.anchorBottom) {
+       e.y += (newH - oldH);
+     }
   }
 }
 
@@ -55,6 +56,7 @@ public interface ThunkString { void apply(String s); }
 class UIElement {
   int x, y;
   public boolean visible = true;  
+  public boolean anchorBottom = false;
   
   void update() {}
   void drawIfVisible() {
@@ -192,8 +194,11 @@ class TextBox extends UIElement {
     textAlign(LEFT, CENTER);
     text(label, x, y - 22, w, h);
     text(t, x + 2, y, w, h);
-    if(focused && (frameCount % 8 < 4)) {
-      float c = textWidth(t.substring(0, caretPos));
+    if(visible && focused && (frameCount % 8 < 4)) {
+      float c = 0;
+      if(caretPos <= t.length()) {
+        c = textWidth(t.substring(0, caretPos));
+      }
       if(c < w - 4) {
         text("_", x + 2 + c, y, w, h);
       }
@@ -202,14 +207,17 @@ class TextBox extends UIElement {
   
   void update() {
     if(wasMousePressed && !isMousePressed) {
-       if((mouseX > x) && (mouseX < x + w) && (mouseY > y) && (mouseY < y + h)) {
+       if(visible && (mouseX > x) && (mouseX < x + w) && (mouseY > y) && (mouseY < y + h)) {
          focused = true;
          caretPos = t.length();
        } else {
+         if(focused) {
+          valueUpdated.apply();
+         }
          focused = false;
        }
     }
-    if(focused && wasKeyPressed && !isKeyPressed) {
+    if(visible && focused && wasKeyPressed && !isKeyPressed) {
       if(keyCode == TAB) {
         int i = elements.indexOf(this);
         if(i < (elements.size() - 1)) {
@@ -218,19 +226,21 @@ class TextBox extends UIElement {
             ((TextBox)uie).focused = true;
           }
         }
+        valueUpdated.apply();
         focused = false;
       } else if ((keyCode == ENTER) || (keyCode == ESC)) {
+        valueUpdated.apply();
         focused = false;
       } else if (keyCode == LEFT) {
         if(caretPos > 0) caretPos--;
       } else if (keyCode == RIGHT) {
         if(caretPos < t.length()) caretPos++;
       } else if(keyCode == BACKSPACE) {
-        if(caretPos == t.length()) {
+        if((caretPos == t.length()) && (caretPos > 0)) {
           t = t.substring(0, max(0, t.length()-1));
         } else if(caretPos > 0) {
           t = t.substring(0, caretPos - 1) + t.substring(caretPos, t.length());
-        }
+        }        
         caretPos--;
       } else {
         if(caretPos == t.length()) {
@@ -240,7 +250,6 @@ class TextBox extends UIElement {
         }
         caretPos++;
       }
-      valueUpdated.apply();
     }
   }
 }

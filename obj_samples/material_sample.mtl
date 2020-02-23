@@ -1,0 +1,3 @@
+newmtl sample1
+Ka 1.0 1.0 0.0
+map_Kd Eye_D.jpg

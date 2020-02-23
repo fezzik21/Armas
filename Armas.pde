@@ -5,15 +5,27 @@
 //Draw origin rotation frame of size relative to the scale
 //still need better camera rotation - rotate around a look at point?
 //Allow for a simple "computational framework" (QScript)
-//nonsense text in text box doesn't cause an update
 //add/remove normals button
 //save normals, texture coordinates to the obj file if there are any
-//rotate mode
-//create a "bonus box" for secret commands
-//actually load the correct textures
-//display the texture indices somehow
-//be able to select faces
-//selecting faces causes you to be able to edit normals, texture coordinates
+//rotate object mode
+//single click select lets you select the nearest face (that the mouse is over)
+//load other textures (e.g. bump, specular) (might require writing a custom shader?)
+//text boxes can't handle capital letters
+//text boxes miss a lot of keystrokes - it's because pressing more than one at once isn't working correctly
+//editing a material
+//color picker
+
+//What's my MVP to release this game to others (0.001):
+//Being able to import and correctly display materials (modulo some of the weirder bits)
+//Writing out at least the normals and the texture coordinates
+//single click to select a face
+//text boxes not sucking quite so hard.
+
+//Version alpha:
+//editable materials (perhaps without creating one yet)
+//rotation
+//text boxes supporting capital letters
+
 
 import org.joml.*;
 
@@ -24,11 +36,19 @@ HashMap<String, Material> materials;
 Button snapToGridCheckbox;
 Button showVerticesCheckbox;
 Button centerOfMassCheckbox;
+Button darkModeCheckbox;
 Vertex centerOfMass;
 Vertex singleSelectedVertex;
+Face singleSelectedFace;
 Button showEdgesCheckbox, showFacesCheckbox, showLightingCheckbox, showNormalsCheckbox, showTexturesCheckbox;
 TextBox xTextBox, yTextBox, zTextBox;
-TextBox nxTextBox, nyTextBox, nzTextBox;
+TextBox nx1TextBox, ny1TextBox, nz1TextBox;
+TextBox nx2TextBox, ny2TextBox, nz2TextBox;
+TextBox nx3TextBox, ny3TextBox, nz3TextBox;
+TextBox tx1TextBox, ty1TextBox;
+TextBox tx2TextBox, ty2TextBox;
+TextBox tx3TextBox, ty3TextBox;
+TextBox commandBox;
 Label editLabel;
 int mode;
 boolean saveNextDraw;
@@ -103,7 +123,7 @@ class Window {
   void mouseClicked() {
     if(!processMousePosition())
       return;
-    if(mode == MODE_SELECT) {
+    if(mode == MODE_SELECT_VERTEX) {
       selectMouseStartX -= 3;
       selectMouseStartY -= 3;
       selectMouseEndX += 3;
@@ -134,7 +154,7 @@ class Window {
         }
       }
       updateSelected();
-    } else if(mode == MODE_VERTEX) { 
+    } else if(mode == MODE_PLACE) { 
       switch(viewType) {
         case VIEW_X:   
         {
@@ -179,8 +199,7 @@ class Window {
     if(!processMousePosition())
       return;
     if(mouseButton == LEFT) {
-      if(mode == MODE_SELECT) {
-        print("mousePressed with select\n");
+      if(mode == MODE_SELECT_VERTEX || mode == MODE_SELECT_FACE) {
         selecting = true;
       } else if (mode == MODE_MOVE) {
       }
@@ -403,6 +422,58 @@ class Window {
   boolean between(float v, float x1, float x2) {
     return (((v > x1) && (v < x2)) || ((v < x1) && (v > x2)));
   }
+   
+  boolean selectHelper(Face f) {
+     switch(viewType) {
+      case VIEW_X:
+      {  
+        Vector3f startPos = new Vector3f(0.0f, -selectMouseStartY, selectMouseStartX);
+        startPos = modelViewMatrix.transformPosition(startPos);
+        Vector3f endPos = new Vector3f(0.0f, -selectMouseEndY, selectMouseEndX);
+        endPos = modelViewMatrix.transformPosition(endPos);
+        //return between(v.y, startPos.y, endPos.y) && between(v.z, startPos.z, endPos.z);
+        return between(f.v1.v.y, startPos.y, endPos.y) && between(f.v1.v.z, startPos.z, endPos.z) &&
+               between(f.v2.v.y, startPos.y, endPos.y) && between(f.v2.v.z, startPos.z, endPos.z) &&
+               between(f.v3.v.y, startPos.y, endPos.y) && between(f.v3.v.z, startPos.z, endPos.z);
+      }
+      case VIEW_Y:
+      {  
+        Vector3f startPos = new Vector3f(selectMouseStartX, 0.0f, -selectMouseStartY);
+        startPos = modelViewMatrix.transformPosition(startPos);
+        Vector3f endPos = new Vector3f(selectMouseEndX, 0.0f, -selectMouseEndY);
+        endPos = modelViewMatrix.transformPosition(endPos);
+        //return between(v.x, startPos.x, endPos.x) && between(v.z, startPos.z, endPos.z);
+        return between(f.v1.v.x, startPos.x, endPos.x) && between(f.v1.v.z, startPos.z, endPos.z) &&
+               between(f.v2.v.x, startPos.x, endPos.x) && between(f.v2.v.z, startPos.z, endPos.z) &&
+               between(f.v3.v.x, startPos.x, endPos.x) && between(f.v3.v.z, startPos.z, endPos.z);
+      }
+      case VIEW_Z:
+      {  
+        Vector3f startPos = new Vector3f(-selectMouseStartX, -selectMouseStartY, 0.0f);
+        startPos = modelViewMatrix.transformPosition(startPos);
+        Vector3f endPos = new Vector3f(-selectMouseEndX, -selectMouseEndY, 0.0f);
+        endPos = modelViewMatrix.transformPosition(endPos);
+        //return between(v.x, startPos.x, endPos.x) && between(v.y, startPos.y, endPos.y);
+        return between(f.v1.v.x, startPos.x, endPos.x) && between(f.v1.v.y, startPos.y, endPos.y) &&
+               between(f.v2.v.x, startPos.x, endPos.x) && between(f.v2.v.y, startPos.y, endPos.y) &&
+               between(f.v3.v.x, startPos.x, endPos.x) && between(f.v3.v.y, startPos.y, endPos.y);
+      }
+      case VIEW_3D:
+      { 
+        float vX1 = g.screenX(f.v1.v.x, f.v1.v.y, f.v1.v.z) - w/2;
+        float vY1 = g.screenY(f.v1.v.x, f.v1.v.y, f.v1.v.z) - h/2;
+        float vX2 = g.screenX(f.v2.v.x, f.v2.v.y, f.v2.v.z) - w/2;
+        float vY2 = g.screenY(f.v2.v.x, f.v2.v.y, f.v2.v.z) - h/2;
+        float vX3 = g.screenX(f.v3.v.x, f.v3.v.y, f.v3.v.z) - w/2;
+        float vY3 = g.screenY(f.v3.v.x, f.v3.v.y, f.v3.v.z) - h/2;
+        //print(vX + " , " + vY + " " + selectMouseStartX + " , " + selectMouseStartY + " " + selectMouseEndX + " , " + selectMouseEndY + "\n");
+        return between(vX1, selectMouseStartX, selectMouseEndX) && between(vY1, selectMouseStartY, selectMouseEndY) &&
+               between(vX2, selectMouseStartX, selectMouseEndX) && between(vY2, selectMouseStartY, selectMouseEndY) &&
+               between(vX3, selectMouseStartX, selectMouseEndX) && between(vY3, selectMouseStartY, selectMouseEndY);
+      }
+     }
+     return false;
+  }
   
   boolean selectHelper(Vertex v) {
      switch(viewType) {
@@ -445,7 +516,7 @@ class Window {
     if(!processMousePosition())
       return;
     
-    if(selecting && (mode == MODE_SELECT)) {
+    if(selecting && (mode == MODE_SELECT_VERTEX)) {
       if(viewType == VIEW_3D) {
         g.perspective(PI/3.0, ((float)w) / h, .0001, 100000.0);
         g.resetMatrix();
@@ -467,6 +538,32 @@ class Window {
         } else {
           if(!(keyPressed && keyCode == CONTROL)) {
             v.selected = false;
+          }
+        }
+      }
+      updateSelected();
+    } else if(selecting && (mode == MODE_SELECT_FACE)) {
+      if(viewType == VIEW_3D) {
+        g.perspective(PI/3.0, ((float)w) / h, .0001, 100000.0);
+        g.resetMatrix();
+        g.applyMatrix(modelViewMatrix.m00(), modelViewMatrix.m10(), modelViewMatrix.m20(), modelViewMatrix.m30(),
+          modelViewMatrix.m01(), modelViewMatrix.m11(), modelViewMatrix.m21(), modelViewMatrix.m31(),
+          modelViewMatrix.m02(), modelViewMatrix.m12(), modelViewMatrix.m22(), modelViewMatrix.m32(),
+          modelViewMatrix.m03(), modelViewMatrix.m13(), modelViewMatrix.m23(), modelViewMatrix.m33());
+      }
+      for (int i = faces.size()-1; i >= 0; i--) {
+        Face f = faces.get(i);
+        if(selectHelper(f) ||
+           ((keyPressed && keyCode == SHIFT) && f.selected))
+        {
+          if(keyPressed && keyCode == CONTROL) {
+            f.selected = false;
+          } else {
+            f.selected = true;
+          }
+        } else {
+          if(!(keyPressed && keyCode == CONTROL)) {
+            f.selected = false;
           }
         }
       }
@@ -498,7 +595,11 @@ class Window {
     Vector3f scale = new Vector3f();
     modelViewMatrix.getScale(scale);
     g.strokeWeight(0.5 * scale.z);
-    g.stroke(92, 92, 92);
+    if(darkModeCheckbox.selected) {
+      g.stroke(92, 92, 92);
+    } else {
+      g.stroke(0, 0, 0);
+    }
     Vector3f zero = new Vector3f();
     zero = modelViewMatrix.transformPosition(zero);
     int gridStartX = (int)((zero.x) / STARTING_SCALE);
@@ -561,7 +662,7 @@ class Window {
     
     g.beginDraw();
     g.pushMatrix();
-    g.background(0);  
+    g.background(darkModeCheckbox.selected ? 0 : 192);  
     if(viewType == VIEW_Z) {
       g.ortho(-w/2, w/2, -h/2, h/2, -10000, 10000);
       g.camera(0.0, 0.0, 10.0, 
@@ -619,8 +720,13 @@ class Window {
           g.stroke(255, 0, 0);  
           g.fill(255, 0, 0);
         } else {
-          g.stroke(255, 255, 255);  
-          g.fill(255, 255, 255);
+          if(darkModeCheckbox.selected) {
+            g.stroke(255, 255, 255);  
+            g.fill(255, 255, 255);
+          } else {
+            g.stroke(0, 0, 0);
+            g.fill(0, 0, 0);
+          }
         }
         g.vertex(v.x, v.y, v.z);
       }
@@ -634,7 +740,11 @@ class Window {
     
     if(showEdgesCheckbox.selected) {
       g.strokeWeight(1.0 * scale.z);
-      g.stroke(255, 255, 255);
+      if(darkModeCheckbox.selected) {
+        g.stroke(255, 255, 255);
+      } else {
+        g.stroke(0, 0, 0);
+      }
     } else {
       g.noStroke();
     }
@@ -651,19 +761,40 @@ class Window {
     g.textureMode(NORMAL);
     for(int i = faces.size() - 1; i >= 0; i--) {
       Face f = faces.get(i);
+      if(darkModeCheckbox.selected) {
+        g.fill(128, 128, 128);
+        g.ambient(255, 255, 255);
+        g.specular(255, 255, 255);
+      } else {
+        g.fill(64, 64, 64);
+        g.ambient(64, 64, 64);
+        g.specular(192, 192, 192);
+      }
       if(f.m != null) {
         g.ambient(255 * f.m.Ka.x, 255 * f.m.Ka.y, 255 * f.m.Ka.z);
         g.fill(255 * f.m.Kd.x, 255 * f.m.Kd.y, 255 * f.m.Kd.z);
         g.specular(255 * f.m.Ks.x, 255 * f.m.Ks.y, 255 * f.m.Ks.z);
       }
+      if(f.selected) {
+        g.fill(255, 0, 0);
+        g.ambient(255, 0, 0);
+        g.specular(255, 0, 0);
+      }
       if(f.v1.hasNormal) {
         g.normal(f.v1.nx, f.v1.ny, f.v1.nz);
       }
       if(showTexturesCheckbox.selected && f.v1.hasTexture) {
+        //println("hasTexture");
         g.vertex(f.v1.v.x, f.v1.v.y, f.v1.v.z, f.v1.tx, f.v1.ty);
         if(setTexture) {
-          setTexture = false;          
-          //g.texture(sampleTexture);
+          //println("setTexture");
+          setTexture = false;    
+          if((f.m != null) && (f.m.texture_diffuse != null)) {
+            //println("setting texture " + f.m.texture_diffuse);
+            g.texture(f.m.texture_diffuse);
+          } else {
+            g.texture(null);
+          }
         }
       } else {
         g.vertex(f.v1.v.x, f.v1.v.y, f.v1.v.z);
@@ -741,6 +872,17 @@ class Window {
   }
 }
 
+void clearSelected() {
+  for (int i = vertices.size()-1; i >= 0; i--) {
+    Vertex v = vertices.get(i);
+    v.selected = false;
+  }
+  for (int i = faces.size()-1; i >= 0; i--) {
+    Face f = faces.get(i);
+    f.selected = false;
+  }
+}
+
 void updateSelected() {
   ArrayList<Vertex> selected = new ArrayList<Vertex>();
   centerOfMass = new Vertex(0.0, 0.0, 0.0);
@@ -754,15 +896,40 @@ void updateSelected() {
       xTextBox.t = String.valueOf(v.x);
       yTextBox.t = String.valueOf(v.y);
       zTextBox.t = String.valueOf(v.z);
-      /*nxTextBox.t = String.valueOf(v.nx);
-      nyTextBox.t = String.valueOf(v.ny);
-      nzTextBox.t = String.valueOf(v.nz);*/
+    }
+  }
+  ArrayList<Face> selectedFaces = new ArrayList<Face>();
+  for (int i = faces.size() - 1; i >= 0; i--) {
+    Face f = faces.get(i);
+    if(f.selected) {
+      selectedFaces.add(f);
+      nx1TextBox.t = String.valueOf(f.v1.nx);
+      ny1TextBox.t = String.valueOf(f.v1.ny);
+      nz1TextBox.t = String.valueOf(f.v1.nz);
+      nx2TextBox.t = String.valueOf(f.v2.nx);
+      ny2TextBox.t = String.valueOf(f.v2.ny);
+      nz2TextBox.t = String.valueOf(f.v2.nz);
+      nx3TextBox.t = String.valueOf(f.v3.nx);
+      ny3TextBox.t = String.valueOf(f.v3.ny);
+      nz3TextBox.t = String.valueOf(f.v3.nz);
+      tx1TextBox.t = String.valueOf(f.v1.tx);
+      ty1TextBox.t = String.valueOf(f.v1.ty);
+      tx2TextBox.t = String.valueOf(f.v2.tx);
+      ty2TextBox.t = String.valueOf(f.v2.ty);
+      tx3TextBox.t = String.valueOf(f.v3.tx);
+      ty3TextBox.t = String.valueOf(f.v3.ty);
     }
   }
   centerOfMass.x /= selected.size();
   centerOfMass.y /= selected.size();
   centerOfMass.z /= selected.size();  
-  editLabel.visible = nxTextBox.visible = nyTextBox.visible = nzTextBox.visible =xTextBox.visible = yTextBox.visible = zTextBox.visible = false;
+  editLabel.visible = xTextBox.visible = yTextBox.visible = zTextBox.visible = false;
+  nx1TextBox.visible = ny1TextBox.visible = nz1TextBox.visible = false;
+  nx2TextBox.visible = ny2TextBox.visible = nz2TextBox.visible = false;
+  nx3TextBox.visible = ny3TextBox.visible = nz3TextBox.visible = false; 
+  tx1TextBox.visible = ty1TextBox.visible = false;
+  tx2TextBox.visible = ty2TextBox.visible = false;
+  tx3TextBox.visible = ty3TextBox.visible = false;
   if(selected.size() == 1) {
     singleSelectedVertex = selected.get(0);
     editLabel.visible = xTextBox.visible = yTextBox.visible = zTextBox.visible = true;
@@ -770,7 +937,27 @@ void updateSelected() {
       nxTextBox.visible = nyTextBox.visible = nzTextBox.visible = true;
     }*/
   }
-  
+  if(selectedFaces.size() == 1) {
+    singleSelectedFace = selectedFaces.get(0);
+    if(singleSelectedFace.v1.hasNormal) {
+      nx1TextBox.visible = ny1TextBox.visible = nz1TextBox.visible = true;
+    }
+    if(singleSelectedFace.v1.hasTexture) {
+      tx1TextBox.visible = ty1TextBox.visible = true;
+    }
+    if(singleSelectedFace.v2.hasNormal) {
+      nx2TextBox.visible = ny2TextBox.visible = nz2TextBox.visible = true;
+    }
+    if(singleSelectedFace.v2.hasTexture) {
+      tx2TextBox.visible = ty2TextBox.visible = true;
+    }
+    if(singleSelectedFace.v3.hasNormal) {
+      nx3TextBox.visible = ny3TextBox.visible = nz3TextBox.visible = true;
+    }
+    if(singleSelectedFace.v3.hasTexture) {
+      tx3TextBox.visible = ty3TextBox.visible = true;
+    }
+  }
 }
 
 void updateSelectedVertexPosition() {
@@ -779,14 +966,29 @@ void updateSelectedVertexPosition() {
     v.x = float(xTextBox.t);
     v.y = float(yTextBox.t);
     v.z = float(zTextBox.t);
-    /*if(v.hasNormal) {
-      v.nx = float(nxTextBox.t);
-      v.ny = float(nyTextBox.t);
-      v.nz = float(nzTextBox.t);
-    }*/
   }
 }
 
+void updateSelectedFace() {
+  Face f = singleSelectedFace;
+  if(f.selected) {
+    f.v1.nx = float(nx1TextBox.t);
+    f.v1.ny = float(ny1TextBox.t);
+    f.v1.nz = float(nz1TextBox.t);
+    f.v2.nx = float(nx2TextBox.t);
+    f.v2.ny = float(ny2TextBox.t);
+    f.v2.nz = float(nz2TextBox.t);
+    f.v3.nx = float(nx3TextBox.t);
+    f.v3.ny = float(ny3TextBox.t);
+    f.v3.nz = float(nz3TextBox.t);
+    f.v1.tx = float(tx1TextBox.t);
+    f.v1.ty = float(ty1TextBox.t);
+    f.v2.tx = float(tx2TextBox.t);
+    f.v2.ty = float(ty2TextBox.t);
+    f.v3.tx = float(tx3TextBox.t);
+    f.v3.ty = float(ty3TextBox.t);    
+  }
+}
 void pre() {
   if((oldWidth != width) || (oldHeight != height)) {
     resizeUI(oldWidth, oldHeight, width, height);
@@ -826,23 +1028,25 @@ void setup() {
   windows = new ArrayList<Window>();
   materials = new HashMap<String, Material>();
   
-  //c = new GUIController(this);
   final PApplet myThis = this;
-  new Line(300);
+  new Line(305);
   new Line(550);
-  new Label("SHOW", 305);
+  new Label("SHOW", 310);
   editLabel = new Label("EDIT", 555);
   new Button("Open", "o", false, null,  width - UI_COLUMN_WIDTH + 10, 15, 100, 25, new Thunk() { @Override public void apply() { openFile(myThis); } } );
   new Button("Save", "p", false, null,  width - UI_COLUMN_WIDTH + 10 + 110, 15, 100, 25, new Thunk() { @Override public void apply() { saveFile(myThis); } } );
-  new Button("Vertex", "1", false, "Mode",  width - UI_COLUMN_WIDTH + 10, 60, 100, 25, new Thunk() { @Override public void apply() { mode = MODE_VERTEX; } } ).selected = true;
-  new Button("Select", "2", false, "Mode",  width - UI_COLUMN_WIDTH + 10 + 110, 60, 100, 25, new Thunk() { @Override public void apply() { mode = MODE_SELECT; } } );
-  new Button("Move", "3", false, "Mode",  width - UI_COLUMN_WIDTH + 10, 100, 100, 25, new Thunk() { @Override public void apply() { mode = MODE_MOVE; } } );
-  new Button("Scale (All)", "4", false, "Mode",  width - UI_COLUMN_WIDTH + 10 + 110, 100, 100, 25, new Thunk() { @Override public void apply() { mode = MODE_SCALE_ALL; } } );
-  new Button("Scale", "5", false, "Mode",  width - UI_COLUMN_WIDTH + 10, 140, 100, 25, new Thunk() { @Override public void apply() { mode = MODE_SCALE; } } );
-  new Button("Rotate", "6", false, "Mode",  width - UI_COLUMN_WIDTH + 10 + 110, 140, 100, 25, new Thunk() { @Override public void apply() { mode = MODE_ROTATE; } } );
-  snapToGridCheckbox = new Button("Snap To Grid", "g", true, null,  width - UI_COLUMN_WIDTH + 10, 190, 100, 25, new Thunk() { @Override public void apply() { } } );
-  centerOfMassCheckbox = new Button("Center of Mass", "h", true, null,  width - UI_COLUMN_WIDTH + 10 + 110, 190, 100, 25, new Thunk() { @Override public void apply() { } } );
+  new Button("Place", "1", false, "Mode",  width - UI_COLUMN_WIDTH + 10, 60, 100, 25, new Thunk() { @Override public void apply() { mode = MODE_PLACE; } } ).selected = true;
+  new Button("Select Vertex", "2", false, "Mode",  width - UI_COLUMN_WIDTH + 10 + 110, 60, 100, 25, new Thunk() { @Override public void apply() { clearSelected(); mode = MODE_SELECT_VERTEX; } } );
+  new Button("Select Face", "3", false, "Mode",  width - UI_COLUMN_WIDTH + 10, 100, 100, 25, new Thunk() { @Override public void apply() { clearSelected(); mode = MODE_SELECT_FACE; } } );
+  new Button("Move", "4", false, "Mode",  width - UI_COLUMN_WIDTH + 10 + 110, 100, 100, 25, new Thunk() { @Override public void apply() { mode = MODE_MOVE; } } );
+  new Button("Scale (All)", "5", false, "Mode",  width - UI_COLUMN_WIDTH + 10, 140, 100, 25, new Thunk() { @Override public void apply() { mode = MODE_SCALE_ALL; } } );
+  new Button("Scale", "6", false, "Mode",  width - UI_COLUMN_WIDTH + 10 + 110, 140, 100, 25, new Thunk() { @Override public void apply() { mode = MODE_SCALE; } } );
+  new Button("Rotate", "7", false, "Mode",  width - UI_COLUMN_WIDTH + 10, 180, 100, 25, new Thunk() { @Override public void apply() { mode = MODE_ROTATE; } } );
+  snapToGridCheckbox = new Button("Snap To Grid", "g", true, null,  width - UI_COLUMN_WIDTH + 10, 230, 100, 25, new Thunk() { @Override public void apply() { } } );
+  centerOfMassCheckbox = new Button("Center of Mass", "h", true, null,  width - UI_COLUMN_WIDTH + 10 + 110, 230, 100, 25, new Thunk() { @Override public void apply() { } } );
   centerOfMassCheckbox.selected = true;
+  darkModeCheckbox = new Button("Dark Mode", "i", true, null,  width - UI_COLUMN_WIDTH + 10, 270, 100, 25, new Thunk() { @Override public void apply() { } } );
+  darkModeCheckbox.selected = true;
   showVerticesCheckbox = new Button("Vertices", "z", true, null,  width - UI_COLUMN_WIDTH + 10, 340, 100, 25, new Thunk() { @Override public void apply() { } } );
   showVerticesCheckbox.selected = true;
   showEdgesCheckbox = new Button("Edges", "x", true, null,  width - UI_COLUMN_WIDTH + 10 + 110, 340, 100, 25, new Thunk() { @Override public void apply() { } } );
@@ -862,9 +1066,24 @@ void setup() {
   xTextBox = new TextBox("", "X", width - UI_COLUMN_WIDTH + 10, 600, 63, 25, new Thunk() { @Override public void apply() { updateSelectedVertexPosition(); } } );
   yTextBox = new TextBox("", "Y", width - UI_COLUMN_WIDTH + 10 + 73, 600, 63, 25, new Thunk() { @Override public void apply() { updateSelectedVertexPosition(); } });
   zTextBox = new TextBox("", "Z", width - UI_COLUMN_WIDTH + 10 + 73 + 73, 600, 64, 25, new Thunk() { @Override public void apply() { updateSelectedVertexPosition(); } });
-  nxTextBox = new TextBox("", "NX", width - UI_COLUMN_WIDTH + 10, 642, 63, 25, new Thunk() { @Override public void apply() { updateSelectedVertexPosition(); } } );
-  nyTextBox = new TextBox("", "NY", width - UI_COLUMN_WIDTH + 10 + 73, 642, 63, 25, new Thunk() { @Override public void apply() { updateSelectedVertexPosition(); } });
-  nzTextBox = new TextBox("", "NZ", width - UI_COLUMN_WIDTH + 10 + 73 + 73, 642, 64, 25, new Thunk() { @Override public void apply() { updateSelectedVertexPosition(); } });
+  nx1TextBox = new TextBox("", "NX", width - UI_COLUMN_WIDTH + 10, 600, 63, 25, new Thunk() { @Override public void apply() { updateSelectedFace(); } } );
+  ny1TextBox = new TextBox("", "NY", width - UI_COLUMN_WIDTH + 10 + 73, 600, 63, 25, new Thunk() { @Override public void apply() { updateSelectedFace(); } });
+  nz1TextBox = new TextBox("", "NZ", width - UI_COLUMN_WIDTH + 10 + 73 + 73, 600, 64, 25, new Thunk() { @Override public void apply() { updateSelectedFace(); } });
+  nx2TextBox = new TextBox("", "NX", width - UI_COLUMN_WIDTH + 10, 640, 63, 25, new Thunk() { @Override public void apply() { updateSelectedFace(); } } );
+  ny2TextBox = new TextBox("", "NY", width - UI_COLUMN_WIDTH + 10 + 73, 640, 63, 25, new Thunk() { @Override public void apply() { updateSelectedFace(); } });
+  nz2TextBox = new TextBox("", "NZ", width - UI_COLUMN_WIDTH + 10 + 73 + 73, 640, 64, 25, new Thunk() { @Override public void apply() { updateSelectedFace(); } });
+  nx3TextBox = new TextBox("", "NX", width - UI_COLUMN_WIDTH + 10, 680, 63, 25, new Thunk() { @Override public void apply() { updateSelectedFace(); } } );
+  ny3TextBox = new TextBox("", "NY", width - UI_COLUMN_WIDTH + 10 + 73, 680, 63, 25, new Thunk() { @Override public void apply() { updateSelectedFace(); } });
+  nz3TextBox = new TextBox("", "NZ", width - UI_COLUMN_WIDTH + 10 + 73 + 73, 680, 64, 25, new Thunk() { @Override public void apply() { updateSelectedFace(); } });
+  tx1TextBox = new TextBox("", "U", width - UI_COLUMN_WIDTH + 10, 720, 63, 25, new Thunk() { @Override public void apply() { updateSelectedFace(); } } );
+  ty1TextBox = new TextBox("", "V", width - UI_COLUMN_WIDTH + 10 + 73, 720, 63, 25, new Thunk() { @Override public void apply() { updateSelectedFace(); } } );
+  tx2TextBox = new TextBox("", "U", width - UI_COLUMN_WIDTH + 10, 760, 63, 25, new Thunk() { @Override public void apply() { updateSelectedFace(); } } );
+  ty2TextBox = new TextBox("", "V", width - UI_COLUMN_WIDTH + 10 + 73, 760, 63, 25, new Thunk() { @Override public void apply() { updateSelectedFace(); } } );
+  tx3TextBox = new TextBox("", "U", width - UI_COLUMN_WIDTH + 10, 800, 63, 25, new Thunk() { @Override public void apply() { updateSelectedFace(); } } );
+  ty3TextBox = new TextBox("", "V", width - UI_COLUMN_WIDTH + 10 + 73, 800, 63, 25, new Thunk() { @Override public void apply() { updateSelectedFace(); } } );
+  
+  commandBox = new TextBox("", "COMMAND", width - UI_COLUMN_WIDTH + 10, height - 27, UI_COLUMN_WIDTH - 20, 25, new Thunk() { @Override public void apply() { executeCommand(); } } );
+  commandBox.anchorBottom = true;
   
   int windowWidth = (width - UI_COLUMN_WIDTH) / 2 - 5;
   int windowHeight = height / 2 - 5;
@@ -874,7 +1093,8 @@ void setup() {
   windows.add(new Window(windowWidth + 5, windowHeight + 5, windowWidth, windowHeight, VIEW_3D));
   
   updateSelected();
-  mode = MODE_VERTEX; 
+  mode = MODE_PLACE; 
+  registerCommands();
   thread("updateUI");
   
   //sampleTexture = loadImage("Eye_D.jpg");
@@ -935,9 +1155,16 @@ void keyReleased() {
     }
   }
   if(ctrlPressed && keyCode == 65) {
-    for (int i = vertices.size()-1; i >= 0; i--) {
-      Vertex v = vertices.get(i);
-      v.selected = true;
+    if(mode == MODE_SELECT_FACE) {
+      for (int i = faces.size()-1; i >= 0; i--) {
+        Face f = faces.get(i);
+        f.selected = true;
+      }
+    } else {
+      for (int i = vertices.size()-1; i >= 0; i--) {
+        Vertex v = vertices.get(i);
+        v.selected = true;
+      }
     }
   }
   if(key == 'f') {
@@ -961,7 +1188,7 @@ void keyReleased() {
   } else if (key == DELETE) {
     for (int i = faces.size()-1; i >= 0; i--) {
       Face f = faces.get(i);
-      if(f.v1.v.selected || f.v2.v.selected || f.v3.v.selected) {
+      if(f.selected || f.v1.v.selected || f.v2.v.selected || f.v3.v.selected) {
         faces.remove(f);
       }
     }
@@ -975,7 +1202,7 @@ void keyReleased() {
 } 
 
 void draw() {
-  background(0);
+  background(darkModeCheckbox.selected ? 0 : 192);
   ortho(-width/2, width/2, -height/2, height/2);
   
   for(Window w : windows) {
@@ -986,7 +1213,11 @@ void draw() {
   }
   ortho(-width/2, width/2, -height/2, height/2);
   strokeWeight(2);
-  stroke(192, 192, 255);
+  if(darkModeCheckbox.selected) {
+    stroke(192, 192, 255);
+  } else {
+    stroke(64, 64, 128);
+  }
   line(0, height / 2, width - UI_COLUMN_WIDTH, height / 2);
   line((width - UI_COLUMN_WIDTH) / 2, 0, (width - UI_COLUMN_WIDTH) / 2, height);
   
