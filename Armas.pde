@@ -7,12 +7,15 @@
 //Allow for a simple "computational framework" (QScript)
 //add/remove normals button
 //rotate object mode
-//single click select lets you select the nearest face (that the mouse is over)
 //load other textures (e.g. bump, specular) (might require writing a custom shader?)
 //editing a material
 //color picker
 //logo (dissolving cube?)
 //text box scroll contents
+//selecting faces behind the front one
+//select faces in views other than 3D
+//select faces algo has little errors
+//select faces algo is slow
 
 //What's my MVP to release this game to others (0.001):
 //Being able to import and correctly display materials (modulo some of the weirder bits)
@@ -22,6 +25,8 @@
 //editable materials (perhaps without creating one yet)
 //rotation
 //text boxes supporting capital letters
+
+
 
 
 import org.joml.*;
@@ -122,83 +127,92 @@ class Window {
     }
   }
 
-  Vector3f debugPoint = new Vector3f();
-  Vector3f debugNormal = new Vector3f();
+  //Vector3f debugPoint = new Vector3f();
+  //Vector3f debugNormal = new Vector3f();
   
-    // Function to get the position of the viewpoint in the current coordinate system
+  // Function to get the position of the viewpoint in the current coordinate system
   Vector3f getEyePosition() {
-    PMatrix3D mat = (PMatrix3D)getMatrix(); //Get the model view matrix
+    PMatrix3D mat = (PMatrix3D)g.getMatrix(); //Get the model view matrix
     mat.invert();
     return new Vector3f( mat.m03, mat.m13, mat.m23 );
   }
-  //Function to perform the conversion to the local coordinate system ( reverse projection ) from the window coordinate system
-  Vector3f unProject(float winX, float winY, float winZ) {
-    PMatrix3D mat = getMatrixLocalToWindow();  
-    mat.invert();
-   
-    float[] in = {winX, winY, winZ, 1.0f};
+  
+  
+  Vector3f unProject(float winX, float winY) {
+    float x = winX / (w / 2);
+    float y = -(winY / (h / 2));
+    float z = 1.0f;
+    Vector3f ray_nds = new Vector3f(x, y, z);
+    
+    PMatrix3D projection = new PMatrix3D(((PGraphics3D)g).projection); 
+    PMatrix3D modelview = new PMatrix3D(((PGraphics3D)g).modelview); 
+    PMatrix3D mvp = new PMatrix3D();
+    mvp.apply(projection);
+    mvp.apply(modelview);
+    projection.invert();
+    modelview.invert();
+    float[] in = {ray_nds.x, ray_nds.y, -1.0, 1.0f};
     float[] out = new float[4];
-    mat.mult(in, out);  // Do not use PMatrix3D.mult(PVector, PVector)
-   
-    if (out[3] == 0 ) {
-      return null;
-    }
-   
-    Vector3f result = new Vector3f(out[0]/out[3], out[1]/out[3], out[2]/out[3]);  
-    return result;
-  }
-   
-  //Function to compute the transformation matrix to the window coordinate system from the local coordinate system
-  PMatrix3D getMatrixLocalToWindow() {
-    PMatrix3D projection = ((PGraphics3D)g).projection; 
-    PMatrix3D modelview = ((PGraphics3D)g).modelview;   
-   
-    // viewport transf matrix
-    PMatrix3D viewport = new PMatrix3D();
-    viewport.m00 = viewport.m03 = width/2;
-    viewport.m11 = -height/2;
-    viewport.m13 =  height/2;
-   
-    // Calculate the transformation matrix to the window coordinate system from the local coordinate system
-    viewport.apply(projection);
-    viewport.apply(modelview);
-    return viewport;
+    projection.mult(in, out);
+    Vector4f ray_eye = new Vector4f(out[0], out[1], -1.0, 0.0);
+    float[] in2 = { ray_eye.x, ray_eye.y, ray_eye.z, ray_eye.w };
+    modelview.mult(in2, out);
+    Vector3f ray_wor = new Vector3f(out[0], out[1], out[2]);
+    ray_wor.normalize();
+    return ray_wor;
+    
   }
   
   boolean rayIntersects(Face f) {
-    //calculate normal to triangle - (v3 - v1) cross (v2 - v1)
-    Vector3f e1 = new Vector3f(f.v3.v.x  - f.v1.v.x, f.v3.v.y - f.v1.v.y, f.v3.v.z - f.v1.v.z);
-    Vector3f e2 = new Vector3f(f.v2.v.x  - f.v1.v.x, f.v2.v.y - f.v1.v.y, f.v2.v.z - f.v1.v.z);
+    Vector3f e1 = new Vector3f(f.v2.v.x  - f.v1.v.x, f.v2.v.y - f.v1.v.y, f.v2.v.z - f.v1.v.z);
+    Vector3f e2 = new Vector3f(f.v3.v.x  - f.v2.v.x, f.v3.v.y - f.v2.v.y, f.v3.v.z - f.v2.v.z);
+    Vector3f e3 = new Vector3f(f.v1.v.x  - f.v3.v.x, f.v1.v.y - f.v3.v.y, f.v1.v.z - f.v3.v.z);
     
     Vector3f n = new Vector3f(e1.y * e2.z - e1.z * e2.y,
                               e1.z * e2.x - e1.x * e2.z,
                               e1.y * e2.x - e1.x * e2.y);
     n.normalize();
-    debugNormal = n;
-    println(e1.x + " , " + e1.y + " , " + e1.z);
-    println(e2.x + " , " + e2.y + " , " + e2.z);
-    println(n.x + " , " + n.y + " , " + n.z);
-    Vector3f eye = getEyePosition();//new Vector3f(0.0, 0.0, 0.0);
-    
-    //PMatrix3D projection = ((PGraphics3D)g).projection; 
-    //PMatrix3D modelview = ((PGraphics3D)g).modelview; 
-    //Matrix4f modelViewMatrixInvert = new Matrix4f(modelViewMatrix).invert();
-    //modelViewMatrixInvert.transformPosition(eye);
-    
-    println("eye = " + eye.x + " , " + eye.y + " , " + eye.z);
+    //debugNormal = n;
+    //println("e1 = " + e1.x + " , " + e1.y + " , " + e1.z);
+    //println("e2 = " + e2.x + " , " + e2.y + " , " + e2.z);
+    //println("n = " + n.x + " , " + n.y + " , " + n.z);
+    Vector3f eye = getEyePosition();//new Vector3f(0.0, 0.0, 0.0);        
+    //println("eye = " + eye.x + " , " + eye.y + " , " + eye.z);
     //Vector3f pointOnScreen = new Vector3f(selectMouseStartX, selectMouseStartY, -1.0);
     //modelViewMatrixInvert.transformPosition(pointOnScreen);
-    Vector3f pointOnScreen = unProject(selectMouseStartX, selectMouseStartY, 10.0);
+    Vector3f pointOnScreen = unProject(selectMouseStartX, selectMouseStartY);
     
-    println("pointOnScreen = " + pointOnScreen.x + " , " + pointOnScreen.y + " , " + pointOnScreen.z);
-    Vector3f ray = new Vector3f(pointOnScreen.x - eye.x, pointOnScreen.y - eye.y, pointOnScreen.z - eye.z);
+    //println("pointOnScreen = " + pointOnScreen.x + " , " + pointOnScreen.y + " , " + pointOnScreen.z);
+    Vector3f ray = new Vector3f(pointOnScreen.x, pointOnScreen.y, pointOnScreen.z);//new Vector3f(pointOnScreen.x - eye.x, pointOnScreen.y - eye.y, pointOnScreen.z - eye.z);
     ray.normalize();
-    println(ray.x + " , " + ray.y + " , " + ray.z);
+    //println("ray = " + ray.x + " , " + ray.y + " , " + ray.z);
     float t = ((f.v1.v.x * n.x + f.v1.v.y * n.y + f.v1.v.z * n.z) -
                (eye.x * n.x + eye.y * n.y + eye.z * n.z)) /
                (ray.x * n.x + ray.y * n.y + ray.z * n.z);
-    Vector3f q = new Vector3f(eye.x + n.x * t, eye.y + n.y * t, eye.z + n.z * t);
-    debugPoint = q;
+    //println("t = " + t);
+    Vector3f q = new Vector3f(eye.x + ray.x * t, eye.y + ray.y * t, eye.z + ray.z * t);
+    //println("q = " + q.x + " , " + q.y + " , " + q.z);
+    //debugPoint = q;
+    
+    //Now tell if q is inside the triangle
+    Vector3f c0 = new Vector3f(q.x - f.v1.v.x, q.y - f.v1.v.y, q.z - f.v1.v.z);
+    Vector3f c1 = new Vector3f(q.x - f.v2.v.x, q.y - f.v2.v.y, q.z - f.v2.v.z);
+    Vector3f c2 = new Vector3f(q.x - f.v3.v.x, q.y - f.v3.v.y, q.z - f.v3.v.z);
+    Vector3f cp0 = new Vector3f();
+    Vector3f cp1 = new Vector3f();
+    Vector3f cp2 = new Vector3f();
+    e1.cross(c0, cp0);  //cp0 = e1 x c0
+    e2.cross(c1, cp1);  //cp1 = e2 x c1
+    e3.cross(c2, cp2);  //cp2 = e3 x c2
+    
+    //println("dps = " + n.dot(cp0) + " , " + n.dot(cp1) + " , " + n.dot(cp2));
+    float dp0 = n.dot(cp0);
+    float dp1 = n.dot(cp1);
+    float dp2 = n.dot(cp2);
+    if(((dp0 > 0) && (dp1 > 0) && (dp2 > 0)) ||
+       ((dp0 < 0) && (dp1 < 0) && (dp2 < 0))) {
+         return true;
+    }
     return false;
   }
   
@@ -230,6 +244,7 @@ class Window {
           }
         }
       }
+      println("");
       updateSelected();
     } else if(mode == MODE_SELECT_VERTEX) {
       selectMouseStartX -= 3;
@@ -839,9 +854,9 @@ class Window {
         g.vertex(v.x, v.y, v.z);
       }
       
-      g.fill(0, 255, 0);
-      g.stroke(0, 255, 0);
-      g.vertex(debugPoint.x, debugPoint.y, debugPoint.z);
+      //g.fill(0, 255, 0);
+      //g.stroke(0, 255, 0);
+      //g.vertex(debugPoint.x, debugPoint.y, debugPoint.z);
       g.endShape();
     }    
     
@@ -894,6 +909,9 @@ class Window {
       }
       if(f.v1.hasNormal) {
         g.normal(f.v1.nx, f.v1.ny, f.v1.nz);
+      }
+      if(!showFacesCheckbox.selected) {
+        g.noFill();
       }
       if(showTexturesCheckbox.selected && f.v1.hasTexture) {
         //println("hasTexture");
@@ -950,9 +968,9 @@ class Window {
             g.vertex(f.v3.v.x, f.v3.v.y, f.v3.v.z);
             g.vertex(f.v3.v.x + f.v3.nx * 0.2, f.v3.v.y + f.v3.ny * 0.2, f.v3.v.z + f.v3.nz * 0.2);          
           }
-          g.stroke(0, 255, 0);
-          g.vertex((f.v1.v.x + f.v2.v.x + f.v3.v.x) / 3, (f.v1.v.y + f.v2.v.y + f.v3.v.y) / 3, (f.v1.v.z + f.v2.v.z + f.v3.v.z) / 3);
-          g.vertex((f.v1.v.x + f.v2.v.x + f.v3.v.x) / 3 + debugNormal.x, (f.v1.v.y + f.v2.v.y + f.v3.v.y) / 3 + debugNormal.y, (f.v1.v.z + f.v2.v.z + f.v3.v.z) / 3 + debugNormal.z);
+          //g.stroke(0, 255, 0);
+          //g.vertex((f.v1.v.x + f.v2.v.x + f.v3.v.x) / 3, (f.v1.v.y + f.v2.v.y + f.v3.v.y) / 3, (f.v1.v.z + f.v2.v.z + f.v3.v.z) / 3);
+          //g.vertex((f.v1.v.x + f.v2.v.x + f.v3.v.x) / 3 + debugNormal.x, (f.v1.v.y + f.v2.v.y + f.v3.v.y) / 3 + debugNormal.y, (f.v1.v.z + f.v2.v.z + f.v3.v.z) / 3 + debugNormal.z);
           
       }
       g.endShape();

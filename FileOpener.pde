@@ -45,6 +45,9 @@ VertexRecord vertexHelper(String s, int startingCount, ArrayList<Vector3f> textu
 void loadMaterials(String s) throws IOException {
   Material m = null;
   File f = new File(s);
+  if(!f.exists()) {
+    return;
+  }
   Scanner scanner = new Scanner(f);
   String line = null;
   while(scanner.hasNextLine()) {
