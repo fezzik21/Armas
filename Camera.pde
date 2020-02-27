@@ -4,27 +4,14 @@
 class Camera {
   Window w;
   
-  boolean keyDown[];
-  boolean keyCodeDown[];
-  
   Camera(Window wIn) {
     w = wIn;
-    keyDown = new boolean[1024];
-    keyCodeDown = new boolean[1024];
   }
   
   void keyPressed() {
-    if(key < 1024) {
-      keyDown[key] = true;
-    }
-    keyCodeDown[keyCode] = true;
   }
   
   void keyReleased() {
-    if(key < 1024) {
-      keyDown[key] = false;
-    }
-    keyCodeDown[keyCode] = false;
   }
   
   void mouseDragged() {
@@ -50,25 +37,25 @@ class Camera {
     Matrix4f modelViewMatrixInvert = new Matrix4f(w.modelViewMatrix).invert();
     if(keyDown['w']) { //w
       Vector3f forward = new Vector3f();
-      modelViewMatrixInvert.transformDirection(0, 0, -1, forward);
+      modelViewMatrixInvert.transformDirection(0, 0, 1, forward);
       forward.mul(keyCodeDown[16] ? CAMERA_MOVEMENT_SHIFT_SCALE : CAMERA_MOVEMENT_SCALE);
       w.modelViewMatrix.translate(forward);
     } 
     if(keyDown['s']) { //don't know s yet
       Vector3f backward = new Vector3f();
-      modelViewMatrixInvert.transformDirection(0, 0, 1, backward);
+      modelViewMatrixInvert.transformDirection(0, 0, -1, backward);
       backward.mul(keyCodeDown[16] ? CAMERA_MOVEMENT_SHIFT_SCALE : CAMERA_MOVEMENT_SCALE);
       w.modelViewMatrix.translate(backward);
     } 
     if(keyDown['a']) {
       Vector3f left = new Vector3f();
-      modelViewMatrixInvert.transformDirection(-1, 0, 0, left);
+      modelViewMatrixInvert.transformDirection(1, 0, 0, left);
       left.mul(keyCodeDown[16] ? CAMERA_MOVEMENT_SHIFT_SCALE : CAMERA_MOVEMENT_SCALE);
       w.modelViewMatrix.translate(left);
     } 
     if(keyDown['d']) {
       Vector3f right = new Vector3f();
-      modelViewMatrixInvert.transformDirection(1, 0, 0, right);
+      modelViewMatrixInvert.transformDirection(-1, 0, 0, right);
       right.mul(keyCodeDown[16] ? CAMERA_MOVEMENT_SHIFT_SCALE : CAMERA_MOVEMENT_SCALE);
       w.modelViewMatrix.translate(right);
     }

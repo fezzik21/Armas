@@ -6,21 +6,17 @@
 //still need better camera rotation - rotate around a look at point?
 //Allow for a simple "computational framework" (QScript)
 //add/remove normals button
-//save normals, texture coordinates to the obj file if there are any
 //rotate object mode
 //single click select lets you select the nearest face (that the mouse is over)
 //load other textures (e.g. bump, specular) (might require writing a custom shader?)
-//text boxes can't handle capital letters
-//text boxes miss a lot of keystrokes - it's because pressing more than one at once isn't working correctly
 //editing a material
 //color picker
 //logo (dissolving cube?)
+//text box scroll contents
 
 //What's my MVP to release this game to others (0.001):
 //Being able to import and correctly display materials (modulo some of the weirder bits)
-//Writing out at least the normals and the texture coordinates
 //single click to select a face
-//text boxes not sucking quite so hard.
 
 //Version alpha:
 //editable materials (perhaps without creating one yet)
@@ -57,6 +53,11 @@ float oldWidth, oldHeight;
 boolean ctrlPressed = false;
 //PImage sampleTexture;
 
+boolean keyDown[];
+boolean lastKeyDown[];
+boolean keyCodeDown[];
+boolean lastKeyCodeDown[];
+  
 class Window {
   int viewType;
   int x, y, w, h;
@@ -121,10 +122,116 @@ class Window {
     }
   }
 
+  Vector3f debugPoint = new Vector3f();
+  Vector3f debugNormal = new Vector3f();
+  
+    // Function to get the position of the viewpoint in the current coordinate system
+  Vector3f getEyePosition() {
+    PMatrix3D mat = (PMatrix3D)getMatrix(); //Get the model view matrix
+    mat.invert();
+    return new Vector3f( mat.m03, mat.m13, mat.m23 );
+  }
+  //Function to perform the conversion to the local coordinate system ( reverse projection ) from the window coordinate system
+  Vector3f unProject(float winX, float winY, float winZ) {
+    PMatrix3D mat = getMatrixLocalToWindow();  
+    mat.invert();
+   
+    float[] in = {winX, winY, winZ, 1.0f};
+    float[] out = new float[4];
+    mat.mult(in, out);  // Do not use PMatrix3D.mult(PVector, PVector)
+   
+    if (out[3] == 0 ) {
+      return null;
+    }
+   
+    Vector3f result = new Vector3f(out[0]/out[3], out[1]/out[3], out[2]/out[3]);  
+    return result;
+  }
+   
+  //Function to compute the transformation matrix to the window coordinate system from the local coordinate system
+  PMatrix3D getMatrixLocalToWindow() {
+    PMatrix3D projection = ((PGraphics3D)g).projection; 
+    PMatrix3D modelview = ((PGraphics3D)g).modelview;   
+   
+    // viewport transf matrix
+    PMatrix3D viewport = new PMatrix3D();
+    viewport.m00 = viewport.m03 = width/2;
+    viewport.m11 = -height/2;
+    viewport.m13 =  height/2;
+   
+    // Calculate the transformation matrix to the window coordinate system from the local coordinate system
+    viewport.apply(projection);
+    viewport.apply(modelview);
+    return viewport;
+  }
+  
+  boolean rayIntersects(Face f) {
+    //calculate normal to triangle - (v3 - v1) cross (v2 - v1)
+    Vector3f e1 = new Vector3f(f.v3.v.x  - f.v1.v.x, f.v3.v.y - f.v1.v.y, f.v3.v.z - f.v1.v.z);
+    Vector3f e2 = new Vector3f(f.v2.v.x  - f.v1.v.x, f.v2.v.y - f.v1.v.y, f.v2.v.z - f.v1.v.z);
+    
+    Vector3f n = new Vector3f(e1.y * e2.z - e1.z * e2.y,
+                              e1.z * e2.x - e1.x * e2.z,
+                              e1.y * e2.x - e1.x * e2.y);
+    n.normalize();
+    debugNormal = n;
+    println(e1.x + " , " + e1.y + " , " + e1.z);
+    println(e2.x + " , " + e2.y + " , " + e2.z);
+    println(n.x + " , " + n.y + " , " + n.z);
+    Vector3f eye = getEyePosition();//new Vector3f(0.0, 0.0, 0.0);
+    
+    //PMatrix3D projection = ((PGraphics3D)g).projection; 
+    //PMatrix3D modelview = ((PGraphics3D)g).modelview; 
+    //Matrix4f modelViewMatrixInvert = new Matrix4f(modelViewMatrix).invert();
+    //modelViewMatrixInvert.transformPosition(eye);
+    
+    println("eye = " + eye.x + " , " + eye.y + " , " + eye.z);
+    //Vector3f pointOnScreen = new Vector3f(selectMouseStartX, selectMouseStartY, -1.0);
+    //modelViewMatrixInvert.transformPosition(pointOnScreen);
+    Vector3f pointOnScreen = unProject(selectMouseStartX, selectMouseStartY, 10.0);
+    
+    println("pointOnScreen = " + pointOnScreen.x + " , " + pointOnScreen.y + " , " + pointOnScreen.z);
+    Vector3f ray = new Vector3f(pointOnScreen.x - eye.x, pointOnScreen.y - eye.y, pointOnScreen.z - eye.z);
+    ray.normalize();
+    println(ray.x + " , " + ray.y + " , " + ray.z);
+    float t = ((f.v1.v.x * n.x + f.v1.v.y * n.y + f.v1.v.z * n.z) -
+               (eye.x * n.x + eye.y * n.y + eye.z * n.z)) /
+               (ray.x * n.x + ray.y * n.y + ray.z * n.z);
+    Vector3f q = new Vector3f(eye.x + n.x * t, eye.y + n.y * t, eye.z + n.z * t);
+    debugPoint = q;
+    return false;
+  }
+  
   void mouseClicked() {
     if(!processMousePosition())
       return;
-    if(mode == MODE_SELECT_VERTEX) {
+    if(mode == MODE_SELECT_FACE) {
+      if(viewType == VIEW_3D) {
+        g.perspective(PI/3.0, ((float)w) / h, .0001, 100000.0);
+        g.resetMatrix();
+        g.applyMatrix(modelViewMatrix.m00(), modelViewMatrix.m10(), modelViewMatrix.m20(), modelViewMatrix.m30(),
+          modelViewMatrix.m01(), modelViewMatrix.m11(), modelViewMatrix.m21(), modelViewMatrix.m31(),
+          modelViewMatrix.m02(), modelViewMatrix.m12(), modelViewMatrix.m22(), modelViewMatrix.m32(),
+          modelViewMatrix.m03(), modelViewMatrix.m13(), modelViewMatrix.m23(), modelViewMatrix.m33());        
+      }
+      for(int i = faces.size() - 1; i >= 0; i--) {
+        Face f = faces.get(i);
+        if(rayIntersects(f) ||
+           ((keyPressed && keyCode == SHIFT) && f.selected))
+        {
+          if(keyPressed && keyCode == CONTROL) {
+            f.selected = false;
+          } else {
+            f.selected = true;
+          }
+        } else {
+          if(!(keyPressed && keyCode == CONTROL)) {
+            f.selected = false;
+          }
+        }
+      }
+      updateSelected();
+    } else if(mode == MODE_SELECT_VERTEX) {
       selectMouseStartX -= 3;
       selectMouseStartY -= 3;
       selectMouseEndX += 3;
@@ -731,6 +838,10 @@ class Window {
         }
         g.vertex(v.x, v.y, v.z);
       }
+      
+      g.fill(0, 255, 0);
+      g.stroke(0, 255, 0);
+      g.vertex(debugPoint.x, debugPoint.y, debugPoint.z);
       g.endShape();
     }    
     
@@ -839,6 +950,10 @@ class Window {
             g.vertex(f.v3.v.x, f.v3.v.y, f.v3.v.z);
             g.vertex(f.v3.v.x + f.v3.nx * 0.2, f.v3.v.y + f.v3.ny * 0.2, f.v3.v.z + f.v3.nz * 0.2);          
           }
+          g.stroke(0, 255, 0);
+          g.vertex((f.v1.v.x + f.v2.v.x + f.v3.v.x) / 3, (f.v1.v.y + f.v2.v.y + f.v3.v.y) / 3, (f.v1.v.z + f.v2.v.z + f.v3.v.z) / 3);
+          g.vertex((f.v1.v.x + f.v2.v.x + f.v3.v.x) / 3 + debugNormal.x, (f.v1.v.y + f.v2.v.y + f.v3.v.y) / 3 + debugNormal.y, (f.v1.v.z + f.v2.v.z + f.v3.v.z) / 3 + debugNormal.z);
+          
       }
       g.endShape();
     }
@@ -1016,6 +1131,7 @@ void settings() {
     oldWidth = 1280;
     oldHeight = 1024;
   }
+  pixelDensity(displayDensity());
 }  
 
 void setup() {
@@ -1029,6 +1145,11 @@ void setup() {
   windows = new ArrayList<Window>();
   materials = new HashMap<String, Material>();
   
+  keyDown = new boolean[1024];
+  keyCodeDown = new boolean[1024];
+  lastKeyDown = new boolean[1024];
+  lastKeyCodeDown = new boolean[1024];
+  
   final PApplet myThis = this;
   new Line(305);
   new Line(550);
@@ -1036,6 +1157,7 @@ void setup() {
   editLabel = new Label("EDIT", 555);
   new Button("Open", "o", false, null,  width - UI_COLUMN_WIDTH + 10, 15, 100, 25, new Thunk() { @Override public void apply() { openFile(myThis); } } );
   new Button("Save", "p", false, null,  width - UI_COLUMN_WIDTH + 10 + 110, 15, 100, 25, new Thunk() { @Override public void apply() { saveFile(myThis); } } );
+  new Line(50);  
   new Button("Place", "1", false, "Mode",  width - UI_COLUMN_WIDTH + 10, 60, 100, 25, new Thunk() { @Override public void apply() { mode = MODE_PLACE; } } ).selected = true;
   new Button("Select Vertex", "2", false, "Mode",  width - UI_COLUMN_WIDTH + 10 + 110, 60, 100, 25, new Thunk() { @Override public void apply() { clearSelected(); mode = MODE_SELECT_VERTEX; } } );
   new Button("Select Face", "3", false, "Mode",  width - UI_COLUMN_WIDTH + 10, 100, 100, 25, new Thunk() { @Override public void apply() { clearSelected(); mode = MODE_SELECT_FACE; } } );
@@ -1043,6 +1165,7 @@ void setup() {
   new Button("Scale (All)", "5", false, "Mode",  width - UI_COLUMN_WIDTH + 10, 140, 100, 25, new Thunk() { @Override public void apply() { mode = MODE_SCALE_ALL; } } );
   new Button("Scale", "6", false, "Mode",  width - UI_COLUMN_WIDTH + 10 + 110, 140, 100, 25, new Thunk() { @Override public void apply() { mode = MODE_SCALE; } } );
   new Button("Rotate", "7", false, "Mode",  width - UI_COLUMN_WIDTH + 10, 180, 100, 25, new Thunk() { @Override public void apply() { mode = MODE_ROTATE; } } );
+  new Line(220);
   snapToGridCheckbox = new Button("Snap To Grid", "g", true, null,  width - UI_COLUMN_WIDTH + 10, 230, 100, 25, new Thunk() { @Override public void apply() { } } );
   centerOfMassCheckbox = new Button("Center of Mass", "h", true, null,  width - UI_COLUMN_WIDTH + 10 + 110, 230, 100, 25, new Thunk() { @Override public void apply() { } } );
   centerOfMassCheckbox.selected = true;
@@ -1097,7 +1220,7 @@ void setup() {
   mode = MODE_PLACE; 
   registerCommands();
   thread("updateUI");
-  
+  textSize(12);
   //sampleTexture = loadImage("Eye_D.jpg");
 }
 
@@ -1132,6 +1255,12 @@ void mouseReleased() {
 }
 
 void keyPressed() {
+  if(key < 1024) {
+    lastKeyDown[key] = keyDown[key];
+    keyDown[key] = true;
+  }
+  lastKeyCodeDown[keyCode] = keyCodeDown[keyCode];
+  keyCodeDown[keyCode] = true;
   if(!uiTakesKeyInput()) {
     for(Window w : windows) {
       w.keyPressed();
@@ -1146,7 +1275,13 @@ void keyPressed() {
 }
 
 void keyReleased() {   
-  for(Window w : windows) {
+    if(key < 1024) {
+      lastKeyDown[key] = keyDown[key];
+      keyDown[key] = false;
+    }
+    lastKeyCodeDown[keyCode] = keyCodeDown[keyCode];
+    keyCodeDown[keyCode] = false;
+    for(Window w : windows) {
     w.keyReleased();
   }
   ArrayList<Vertex> selected = new ArrayList<Vertex>();

@@ -149,9 +149,9 @@ class Button extends UIElement {
     
   void draw() {
     if(highlight) {
-      fill(192, 192, 192);
+      fill(220, 220, 220);
     } else {
-      fill(128, 128, 128);
+      fill(192, 192, 192);
     }
     stroke(0, 0, 0);
     rect(x, y, w, h);
@@ -217,38 +217,51 @@ class TextBox extends UIElement {
          focused = false;
        }
     }
-    if(visible && focused && wasKeyPressed && !isKeyPressed) {
-      if(keyCode == TAB) {
-        int i = elements.indexOf(this);
-        if(i < (elements.size() - 1)) {
-          UIElement uie = elements.get(i + 1);
-          if(uie instanceof TextBox) {
-            ((TextBox)uie).focused = true;
+    if(visible && focused) {
+      for(int k = 0; k < 1024; k++) {
+        if(keyDown[k] && !lastKeyDown[k]) {
+          if(k != BACKSPACE) {
+            if(caretPos == t.length()) {
+              t = t + key;
+            } else {
+              t = t.substring(0, caretPos) + key + t.substring(caretPos, t.length());
+            }
+            keyDown[k] = false;
+            caretPos++;
           }
         }
-        valueUpdated.apply();
-        focused = false;
-      } else if ((keyCode == ENTER) || (keyCode == ESC)) {
-        valueUpdated.apply();
-        focused = false;
-      } else if (keyCode == LEFT) {
-        if(caretPos > 0) caretPos--;
-      } else if (keyCode == RIGHT) {
-        if(caretPos < t.length()) caretPos++;
-      } else if(keyCode == BACKSPACE) {
-        if((caretPos == t.length()) && (caretPos > 0)) {
-          t = t.substring(0, max(0, t.length()-1));
-        } else if(caretPos > 0) {
-          t = t.substring(0, caretPos - 1) + t.substring(caretPos, t.length());
-        }        
-        caretPos--;
-      } else {
-        if(caretPos == t.length()) {
-          t = t + key;
-        } else {
-          t = t.substring(0, caretPos) + key + t.substring(caretPos, t.length());
+        if(keyCodeDown[k] && !lastKeyCodeDown[k]) {
+          if(k == TAB) {
+            int i = elements.indexOf(this);
+            if(i < (elements.size() - 1)) {
+              UIElement uie = elements.get(i + 1);
+              if(uie instanceof TextBox) {
+                ((TextBox)uie).focused = true;
+              }
+            }
+            valueUpdated.apply();
+            keyCodeDown[k] = false;
+            focused = false;
+            
+          } else if ((k == ENTER) || (k == ESC)) {
+            valueUpdated.apply();
+            keyCodeDown[k] = false;
+            focused = false;
+          } else if (k == LEFT) {
+            if(caretPos > 0) caretPos--;
+          } else if (k == RIGHT) {
+            if(caretPos < t.length()) caretPos++;
+          } else if(k == BACKSPACE) {
+            if((caretPos == t.length()) && (caretPos > 0)) {
+              t = t.substring(0, max(0, t.length()-1));
+              caretPos--;
+            } else if(caretPos > 0) {
+              t = t.substring(0, caretPos - 1) + t.substring(caretPos, t.length());
+              caretPos--;
+            }        
+            keyCodeDown[k] = false;
+          }
         }
-        caretPos++;
       }
     }
   }

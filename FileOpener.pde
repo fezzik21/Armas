@@ -67,7 +67,6 @@ void loadMaterials(String s) throws IOException {
       m.Ks = new Vector3f(float(pieces[1]), float(pieces[2]), float(pieces[3]));
     }
     if(pieces[0].equals("map_Kd")) {
-      println(f.getParent() + "\\" + pieces[1]);
       m.texture_diffuse = loadImage(f.getParent() + "\\" + pieces[1]);      
     }
   }
@@ -173,6 +172,23 @@ void openFile(final PApplet p) {
         });
 }
 
+int curNormalIndex, curTextureIndex;
+
+String vertexRecordHelper(VertexRecord vr) {
+  String result = (vertices.indexOf(vr.v)) + "";
+  if(vr.hasTexture) {
+    result = result + "/" + curTextureIndex;
+    curTextureIndex++;
+  } else if (!vr.hasTexture && vr.hasNormal) {
+    result = result + "/";
+  }
+  if(vr.hasNormal) {
+    result = result + "/" + curNormalIndex;
+    curNormalIndex++;
+  }
+  return result;
+}
+
 void saveFile(final PApplet p) {
   EventQueue.invokeLater(new Runnable() {
             @Override
@@ -193,7 +209,34 @@ void saveFile(final PApplet p) {
                           pw.println("");
                           for (int i = faces.size()-1; i >= 0; i--) {
                             Face f = faces.get(i);
-                            pw.println("f " + (vertices.indexOf(f.v1.v) + 1) + " " + (vertices.indexOf(f.v2.v) + 1) + " " + (vertices.indexOf(f.v3.v) + 1));
+                            if(f.v1.hasNormal) {
+                              pw.println("vn " + f.v1.nx + " " + f.v1.ny + " " + f.v1.nz);
+                            }
+                            if(f.v2.hasNormal) {
+                              pw.println("vn " + f.v2.nx + " " + f.v2.ny + " " + f.v2.nz);
+                            }
+                            if(f.v3.hasNormal) {
+                              pw.println("vn " + f.v3.nx + " " + f.v3.ny + " " + f.v3.nz);
+                            }
+                          }
+                          pw.println("");
+                          for (int i = faces.size()-1; i >= 0; i--) {
+                            Face f = faces.get(i);
+                            if(f.v1.hasTexture) {
+                              pw.println("vt " + f.v1.tx + " " + f.v1.ty);
+                            }
+                            if(f.v2.hasTexture) {
+                              pw.println("vt " + f.v2.tx + " " + f.v2.ty);
+                            }
+                            if(f.v3.hasTexture) {
+                              pw.println("vt " + f.v3.tx + " " + f.v3.ty);
+                            }
+                          }
+                          curNormalIndex = 0;
+                          curTextureIndex = 0;
+                          for (int i = faces.size()-1; i >= 0; i--) {
+                            Face f = faces.get(i);
+                            pw.println("f " + vertexRecordHelper(f.v1) + " " + vertexRecordHelper(f.v2) + " " + vertexRecordHelper(f.v3));
                           }
                           pw.flush();
                           pw.close();
