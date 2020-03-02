@@ -18,6 +18,19 @@ boolean uiTakesKeyInput() {
   return false;
 }
 
+boolean uiTakesMouseInput() {
+  for (int i = elements.size()-1; i >= 0; i--) {
+    UIElement e = elements.get(i);
+    if(e instanceof ColorPicker) {
+      ColorPicker cp = (ColorPicker)e;
+      if(cp.takesMouseInput()) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 void updateUI() {
   while(true) {
     isMousePressed = mousePressed;
@@ -32,9 +45,10 @@ void updateUI() {
 }
 
 void drawUI() {
+  hint(DISABLE_OPTIMIZED_STROKE);
   fill(255, 255, 255);
   rect(width - UI_COLUMN_WIDTH, 0, width, height);
-  for (int i = elements.size()-1; i >= 0; i--) {
+  for (int i = 0; i < elements.size(); i++) {
       UIElement e = elements.get(i);
       e.drawIfVisible();
   }      
@@ -58,6 +72,19 @@ class UIElement {
   public boolean visible = true;  
   public boolean anchorBottom = false;
   
+  UIElement() {  
+    elements.add(this);
+  }
+  UIElement(UIGroup g) {    
+    elements.add(this);
+    if(g != null) {
+      g.add(this);
+    }
+  }
+  
+  void setVisible(boolean b) {
+    visible = b;
+  }
   void update() {}
   void drawIfVisible() {
     if(visible) {
@@ -67,13 +94,33 @@ class UIElement {
   void draw() {}
 }
 
+class UIGroup extends UIElement {
+  private ArrayList<UIElement> elements = new ArrayList<UIElement>();
+  
+  UIGroup() {}
+  UIGroup(UIGroup g) {
+    super(g);
+  }
+  
+  void add(UIElement e) {
+    elements.add(e);
+  }
+  
+  void setVisible(boolean b) {
+    for (int i = elements.size()-1; i >= 0; i--) {
+     UIElement e = elements.get(i);
+     e.setVisible(b);
+    }
+  }
+}
+
 class Label extends UIElement {
   String t;
   
-  Label(String tIn, int yIn) {
+  Label(String tIn, int yIn, UIGroup g) {
+    super(g);
     y = yIn;
     t = tIn;
-    elements.add(this);
   }
   
   void draw() {
@@ -83,9 +130,9 @@ class Label extends UIElement {
 }
 
 class Line extends UIElement {
-  Line(int yIn) {
+  Line(int yIn, UIGroup g) {
+    super(g);
     y = yIn;
-    elements.add(this);
   }
   
   void draw() {
@@ -112,7 +159,6 @@ class Button extends UIElement {
     isCheckbox = isCheckboxIn;
     group = groupIn;
     selected = false;
-    elements.add(this);
   }
   
   void apply() {
@@ -168,6 +214,219 @@ class Button extends UIElement {
   }
 }
 
+boolean contains(float x, float y, float w, float h) {
+  return ((mouseX > x) && (mouseX < (x + w)) && (mouseY > y) && (mouseY < (y + h)));
+}
+
+class VectorEditor extends UIGroup {
+  TextBox x, y, z;
+  ColorPicker cp;
+  Thunk thunk;
+  
+  VectorEditor(String t1, String t2, String t3, boolean showZ, boolean useColorPickerIn, int xStart, int yStart, Thunk thunkIn, UIGroup group) {
+    super(group);
+    thunk = thunkIn;
+    x = new TextBox("", t1, xStart, yStart, 63, 25, thunkIn, this );
+    y = new TextBox("", t2, xStart + 73, yStart, 63, 25, thunkIn, this );
+    if(showZ) {
+      z = new TextBox("", t3, xStart + 73 + 73, yStart, 63, 25, thunkIn, this );
+    }
+    if(useColorPickerIn) { 
+      cp = new ColorPicker(xStart - 150, yStart, 255, 0, 0, new Thunk() { @Override public void apply() { x.t = String.valueOf(cp.r / 255.0); y.t = String.valueOf(cp.g / 255.0); z.t = String.valueOf(cp.b / 255.0); thunk.apply(); } }, this);
+      cp.visible = false;
+    }
+  }
+  
+  void update() {
+    if(contains(x.x + 73 + 73 + 35, x.y - 12, 35, 10)) {
+      if(wasMousePressed && !isMousePressed) {
+        cp.visible = true;
+      }      
+    }
+  }
+  void draw() {
+    if(cp != null) {
+      stroke(255, 255, 255);
+      fill(float(x.t) * 255, float(y.t) * 255, float(z.t) * 255);
+      rect(x.x + 73 + 73 + 35, x.y - 12, 35, 10);
+    }
+  }
+  
+  void setVisible(boolean b) {
+    this.visible = b;
+    x.setVisible(b);
+    y.setVisible(b);
+    if(z != null) {
+      z.setVisible(b);
+    }
+    return;
+  }
+  
+  void updateText(Vector3f v) {
+    x.t = String.valueOf(v.x);
+    y.t = String.valueOf(v.y);
+    if(z != null) {
+      z.t = String.valueOf(v.z);
+    }
+  }
+  
+  void updateValues(Vector3f v) {
+    v.x = float(x.t);
+    v.y = float(y.t);
+    if(z != null) {
+      v.z = float(z.t);
+    }
+  }
+}
+
+class DropDownList extends UIElement {
+  int w, h;
+  ArrayList<String> options;
+  int selectedOption;
+  boolean open;
+  Thunk valueChanged;
+  
+  DropDownList(ArrayList<String> optionsIn, int xIn, int yIn, int wIn, int hIn, Thunk valueChangedIn, UIGroup group) {
+    super(group);
+    x = xIn; y = yIn;
+    w = wIn;
+    h = hIn;
+    options = optionsIn;
+    open = false;
+    valueChanged = valueChangedIn;
+    selectedOption = 0;
+  }
+  
+  void update() {
+    if((mouseX > x) && (mouseX < x + w) && (mouseY > y) && (mouseY < y + h)) {
+      if(wasMousePressed && !isMousePressed) {
+        open = !open;
+      }      
+    } else if (open &&
+               (mouseX > (x + 10)) && (mouseX < (x + w - 10)) &&
+               (mouseY > (y + h)) && (mouseY < (y + h + options.size() * h))) {
+      if(wasMousePressed && !isMousePressed) {        
+        selectedOption = (mouseY - (y + h)) / h;
+        open = false;
+        valueChanged.apply();
+      }
+    } else {
+      if(wasMousePressed && !isMousePressed) {
+        open = false;
+      }
+    }
+  }
+  
+  void draw() {
+    fill(255, 255, 255);
+    stroke(0, 0, 0);
+    rect(x, y, w, h);
+    fill(0, 0, 0);
+    textAlign(LEFT, CENTER);
+    if(selectedOption < options.size()) {
+      text(options.get(selectedOption), x + 2, y, w, h);
+    }
+    triangle(x + w - 10, y + 5,
+             x + w - 4, y + 5,
+             x + w - 7, y + 11);
+    if(open) {
+      fill(255, 255, 255);
+      rect(x + 10, y + h, w - 10, options.size() * h);
+      fill(0, 0, 0);
+      for(int i = 0 ; i < options.size(); ++i) {
+        text(options.get(i), x + 12, y + h + i * h, w - 10, h);
+      }
+    }
+  }
+}
+
+class ColorPicker extends UIElement {
+  Thunk valueUpdated;
+  float hue;
+  float saturation;
+  float value;
+  float r, g, b;
+  
+  ColorPicker(int xIn, int yIn, int rIn, int gIn, int bIn, Thunk valueUpdatedIn, UIGroup group) {
+    super(group);
+    x = xIn; y = yIn;
+    if(y + 160 > height) {
+      y = height - 160;
+    }
+    r = rIn; g = gIn; b = bIn;
+    valueUpdated = valueUpdatedIn;
+    hue = 120.0;
+    saturation = 0.5;
+    value = 0.5;
+  }
+  
+  
+  boolean takesMouseInput() {
+    return (visible &&
+       contains(x, y , 130, 160));
+  }
+  
+  void update() {
+    if(visible) {
+      if(contains(x + 10, y + 5, 100, 150)) { 
+        if(isMousePressed) {
+          Vector3f hsv = new Vector3f(hue, (mouseX - (x + 10)) / 100.0, (mouseY - (y + 5)) * (1.0 / 150.0));
+          Vector3f rgb = hsvToRgb(hsv);
+          saturation = (mouseX - (x + 10)) / 100.0;
+          value = (mouseY - (y + 5)) * (1.0 / 150.0);
+          r = rgb.x;
+          g = rgb.y;
+          b = rgb.z;
+          valueUpdated.apply();
+        }
+      }
+      if(contains(x + 115, y + 5, 10, 100)) {   
+        if(isMousePressed) { 
+          Vector3f hsv = new Vector3f((mouseY - (y + 5)) * (360.0 / 100.0), saturation, value);
+          Vector3f rgb = hsvToRgb(hsv);
+          hue = (mouseY - (y + 5)) * (360.0 / 100.0);
+          r = rgb.x;
+          g = rgb.y;
+          b = rgb.z;
+          valueUpdated.apply();
+        }
+      }
+      if(contains(x + 115, y + 145, 15, 15)) {  
+        if(wasMousePressed && !isMousePressed) {  
+          visible = false;
+        }
+      }
+    }
+  }
+  
+  void draw() {
+    fill(128, 128, 128);
+    stroke(255, 255, 255);
+    rect(x, y, 130, 160);
+    //colorMode(HSB, 100);
+    for (int s = 0; s < 100; s++) {
+      for(int v = 0; v < 150; v++) {
+        Vector3f hsv = new Vector3f(hue, s / 100.0, v / 150.0);
+        Vector3f rgb = hsvToRgb(hsv);
+        set(x + 10 + s, y + 5 + v, color(rgb.x, rgb.y, rgb.z));        
+      }
+    }
+    for(int h = 0; h < 100; h++) {
+      for(int xh = 0; xh < 10; xh++) {
+        Vector3f hsv = new Vector3f(h * (360.0 / 100.0), 1.0, 1.0);
+        Vector3f rgb = hsvToRgb(hsv);
+        set(x + 115 + xh, y + 5 + h, color(rgb.x, rgb.y, rgb.z));
+      }
+    }
+    fill(255, 255, 255);
+    stroke(0, 0, 0);
+    circle(x + 121, y + 151, 12);
+    line(x + 118, y + 148, x + 124, y + 154);
+    line(x + 118, y + 154, x + 124, y + 148);
+    //colorMode(RGB, 255);
+  }
+}
+
 class TextBox extends UIElement {
   int w, h;
   String t;
@@ -175,12 +434,13 @@ class TextBox extends UIElement {
   public boolean focused;
   Thunk valueUpdated;
   int caretPos;
-  TextBox(String tIn, String labelIn, int xIn, int yIn, int wIn, int hIn, Thunk valueUpdatedIn) {
+  
+  TextBox(String tIn, String labelIn, int xIn, int yIn, int wIn, int hIn, Thunk valueUpdatedIn, UIGroup group) {
+    super(group);
     x = xIn; y = yIn; w = wIn; h = hIn;
     t = tIn;
     label = labelIn;
     caretPos = 0;
-    elements.add(this);
     focused = false;
     valueUpdated = valueUpdatedIn;
   }
@@ -220,7 +480,7 @@ class TextBox extends UIElement {
     if(visible && focused) {
       for(int k = 0; k < 1024; k++) {
         if(keyDown[k] && !lastKeyDown[k]) {
-          if(k != BACKSPACE) {
+          if((k != ENTER) && (k != BACKSPACE)) {
             if(caretPos == t.length()) {
               t = t + key;
             } else {
@@ -249,8 +509,10 @@ class TextBox extends UIElement {
             focused = false;
           } else if (k == LEFT) {
             if(caretPos > 0) caretPos--;
+            keyCodeDown[k] = false;
           } else if (k == RIGHT) {
             if(caretPos < t.length()) caretPos++;
+            keyCodeDown[k] = false;
           } else if(k == BACKSPACE) {
             if((caretPos == t.length()) && (caretPos > 0)) {
               t = t.substring(0, max(0, t.length()-1));

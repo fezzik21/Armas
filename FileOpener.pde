@@ -58,7 +58,9 @@ void loadMaterials(String s) throws IOException {
     }
     if(pieces[0].equals("newmtl")) {
       m = new Material(pieces[1]);
+      println("add materials name " + m.name);
       materials.put(m.name, m);
+      println("mat count = " + materials.size());
     }
     if(pieces[0].equals("Ka")) {
       m.Ka = new Vector3f(float(pieces[1]), float(pieces[2]), float(pieces[3]));
@@ -170,6 +172,7 @@ void openFile(final PApplet p) {
                               e.printStackTrace();
                             }   
                           }
+                          resetMaterials();
                       }
                   }              
         });
