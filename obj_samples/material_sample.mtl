@@ -1,6 +1,8 @@
 newmtl sample1
 Ka 1.0 1.0 0.0
+Kd 1.0 1.0 0.0
 map_Kd Eye_D.jpg
 
 newmtl sample_cyan
 Ka 0.0 1.0 1.0
+Kd 1.0 1.0 0.0

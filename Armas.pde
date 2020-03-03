@@ -8,17 +8,24 @@
 //rotate object mode
 //load other textures (e.g. bump, specular) (might require writing a custom shader?)
 //text box scroll contents
-//selecting faces behind the front one
+//selecting only one face (the closest one)
 //select faces algo has offset errors
-//rename to avalanche, have a mountain logo
+//rename to avalanche, have a mountain logo, figure out how to make an executable
 //camera rotate tries to keep the up vector up somehow
 //create a new material
 //  add a (non-working) "<new material>" option
 //something's wrong with changing materials, the colors get screwed up eventually
 //Name: Servo?  Torgo?  Avalanche?  
-//turn face command into a button (mostly to make the hot key more obvious)
 //allow material to load a new texture
 //  display the current texture somehow
+//move command uses Ctrl to only move in one axis
+//add a help button (someplace), or at least some help documentation someplace
+//lots of 3d z-fighting
+//save file completion bar
+//scale all totally screwed up on iron man
+//text boxes print floats to only 3 significant digits
+
+
 
 import java.util.*;
 import org.joml.*;
@@ -274,8 +281,9 @@ void setup() {
   showTexturesCheckbox = new Button("Texture", "n", true, null,  width - UI_COLUMN_WIDTH + 10 + 110, 420, 100, 25, new Thunk() { @Override public void apply() { } } );
   showTexturesCheckbox.selected = true;
   
-  new Button("Cube", "/", false, null,  width - UI_COLUMN_WIDTH + 10, 480, 100, 25, new Thunk() { @Override public void apply() {  makeCube(); } } );
-  new Button("Sphere", "?", false, null,  width - UI_COLUMN_WIDTH + 10 + 110, 480, 100, 25, new Thunk() { @Override public void apply() {  makeSphere(); } } );
+  new Button("Face", "f", false, null,  width - UI_COLUMN_WIDTH + 10, 475, 100, 25, new Thunk() { @Override public void apply() {  addFace(); } } );
+  new Button("Cube", "/", false, null,  width - UI_COLUMN_WIDTH + 10, 515, 100, 25, new Thunk() { @Override public void apply() {  makeCube(); } } );
+  new Button("Sphere", "?", false, null,  width - UI_COLUMN_WIDTH + 10 + 110, 515, 100, 25, new Thunk() { @Override public void apply() {  makeSphere(); } } );
   
   vertexEditGroup = new UIGroup();
   vEditor = new VectorEditor("X", "Y", "Z", true, false, width - UI_COLUMN_WIDTH + 10, 600, new Thunk() { @Override public void apply() { updateSelectedVertexPosition(); } }, vertexEditGroup);
@@ -395,7 +403,6 @@ void keyReleased() {
     for(Window w : windows) {
     w.keyReleased();
   }
-  ArrayList<Vertex> selected = new ArrayList<Vertex>();
   if (key == CODED) {
     if (keyCode == CONTROL) {
       ctrlPressed = false;
@@ -414,25 +421,7 @@ void keyReleased() {
       }
     }
   }
-  if(key == 'f') {
-    for (int i = vertices.size()-1; i >= 0; i--) {
-      Vertex v = vertices.get(i);
-      if(v.selected) {
-        selected.add(v);
-      }
-    }
-    if(selected.size() == 3) {
-      //See if the face already exists
-      for (int i = faces.size()-1; i >= 0; i--) {
-        Face f = faces.get(i);
-        if(selected.contains(f.v1) && selected.contains(f.v2) && selected.contains(f.v3)) {
-          faces.remove(f);
-          return;
-        }
-      }
-      faces.add(new Face(selected.get(0), selected.get(1), selected.get(2)));
-    }
-  } else if (key == DELETE) {
+  if (key == DELETE) {
     for (int i = faces.size()-1; i >= 0; i--) {
       Face f = faces.get(i);
       if(f.selected || f.v1.v.selected || f.v2.v.selected || f.v3.v.selected) {
@@ -447,6 +436,27 @@ void keyReleased() {
     }
   } 
 } 
+
+void addFace() {  
+  ArrayList<Vertex> selected = new ArrayList<Vertex>();
+  for (int i = vertices.size()-1; i >= 0; i--) {
+    Vertex v = vertices.get(i);
+    if(v.selected) {
+      selected.add(v);
+    }
+  }
+  if(selected.size() == 3) {
+    //See if the face already exists
+    for (int i = faces.size()-1; i >= 0; i--) {
+      Face f = faces.get(i);
+      if(selected.contains(f.v1) && selected.contains(f.v2) && selected.contains(f.v3)) {
+        faces.remove(f);
+        return;
+      }
+    }
+    faces.add(new Face(selected.get(0), selected.get(1), selected.get(2)));
+  }
+}
 
 void draw() {
   background(darkModeCheckbox.selected ? 0 : 192);
